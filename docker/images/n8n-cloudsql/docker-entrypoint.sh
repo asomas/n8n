@@ -2,10 +2,10 @@
 
 # Connection String
 # Setup GCP SQL Proxy
-CONN_NAME="${GOOGLE_PROJECT}:${REGION}:${DB_INSTANCE}"
+# CONN_NAME="${GOOGLE_PROJECT}:${REGION}:${DB_INSTANCE}"
 
 echo "Starting SQL proxy..."
-/cloud_sql_proxy -instances=${CONN_NAME}=tcp:5432 &
+/cloud_sql_proxy -instances=${CLOUDSQL_CONNECTION_NAME}=tcp:5432 &
 
 echo "Waiting for proxy to start..."
 sleep 20

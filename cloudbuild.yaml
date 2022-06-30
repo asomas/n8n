@@ -1,0 +1,49 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '--no-cache'
+      - '-t'
+      - '$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
+      - .
+      - '-f'
+      - docker/images/n8n-cloudsql/Dockerfile
+      - '--build-arg'
+      - N8N_VERSION=$_RELEASE_VERSION
+    id: Build
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
+    id: Push
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    args:
+      - run
+      - services
+      - update
+      - $_SERVICE_NAME
+      - '--platform=managed'
+      - '--image=$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
+      - '--set-env-vars=[DB_TYPE=postgresdb,N8N_PROTOCOL=https,DOMAIN_NAME=https://n8n-uirq5hbrpa-nw.a.run.app,N8N_HOST=n8n-uirq5hbrpa-nw.a.run.app,WEBHOOK_TUNNEL_URL=https://n8n-uirq5hbrpa-nw.a.run.app,NODE_ENV=production]'
+      - '--set-secrets=[DB_POSTGRESDB_PASSWORD=CLOUDSQL_PASSWORD,DB_POSTGRESDB_USER=CLOUDSQL_USERNAME,CLOUDSQL_CONNECTION_NAME=CLOUDSQL_CONNECTION_NAME]'
+      - >-
+        --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID,$_LABELS
+      - '--region=$_DEPLOY_REGION'
+      - '--quiet'
+    id: Deploy
+    entrypoint: gcloud
+images:
+  - '$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
+options:
+  substitutionOption: ALLOW_LOOSE
+substitutions:
+  _PLATFORM: managed
+  _SERVICE_NAME: n8n
+  _DEPLOY_REGION: europe-west2
+  _LABELS: gcb-trigger-id=6f0ea908-2f26-4637-8072-fcd5d70111ff
+  _TRIGGER_ID: 6f0ea908-2f26-4637-8072-fcd5d70111ff
+  _GCR_HOSTNAME: eu.gcr.io
+tags:
+  - gcp-cloud-build-deploy-cloud-run
+  - gcp-cloud-build-deploy-cloud-run-managed
+  - n8n
