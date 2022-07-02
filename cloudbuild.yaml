@@ -24,7 +24,7 @@ steps:
       - $_SERVICE_NAME
       - '--platform=managed'
       - '--image=$_GCR_HOSTNAME/$PROJECT_ID/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
-      - '--set-env-vars=DB_TYPE=postgresdb,N8N_PROTOCOL=https,N8N_HOST=$_INSTANCE_URL,WEBHOOK_TUNNEL_URL=$_INSTANCE_URL,NODE_ENV=production,N8N_LOG_LEVEL=info'
+      - '--set-env-vars=DB_TYPE=postgresdb,N8N_PROTOCOL=https,N8N_HOST=$_INSTANCE_HOST,WEBHOOK_TUNNEL_URL=https://$_INSTANCE_HOST,NODE_ENV=production,N8N_LOG_LEVEL=info'
       - '--set-secrets=DB_POSTGRESDB_PASSWORD=CLOUDSQL_PASSWORD:latest,DB_POSTGRESDB_USER=CLOUDSQL_USERNAME:latest,CLOUDSQL_CONNECTION_NAME=CLOUDSQL_CONNECTION_NAME:latest,N8N_ENCRYPTION_KEY=N8N_ENCRYPTION_KEY:latest'
       - >-
         --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID,$_LABELS
