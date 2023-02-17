@@ -1,9 +1,6 @@
-import {
-	IPollFunctions,
-} from 'n8n-core';
+import type { IPollFunctions } from 'n8n-core';
 
-import {
-	IDataObject,
+import type {
 	ILoadOptionsFunctions,
 	INodeExecutionData,
 	INodePropertyOptions,
@@ -11,18 +8,9 @@ import {
 	INodeTypeDescription,
 } from 'n8n-workflow';
 
-import {
-	getColumns,
-	rowFormatColumns,
-	seaTableApiRequest,
-	simplify,
-} from './GenericFunctions';
+import { getColumns, rowFormatColumns, seaTableApiRequest, simplify } from './GenericFunctions';
 
-import {
-	ICtx,
-	IRow,
-	IRowResponse,
-} from './Interfaces';
+import type { ICtx, IRow, IRowResponse } from './Interfaces';
 
 import moment from 'moment';
 
@@ -57,7 +45,8 @@ export class SeaTableTrigger implements INodeType {
 					loadOptionsMethod: 'getTableNames',
 				},
 				default: '',
-				description: 'The name of SeaTable table to access. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/nodes/expressions.html#expressions">expression</a>.',
+				description:
+					'The name of SeaTable table to access. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code-examples/expressions/">expression</a>.',
 			},
 			{
 				displayName: 'Event',
@@ -82,7 +71,8 @@ export class SeaTableTrigger implements INodeType {
 				name: 'simple',
 				type: 'boolean',
 				default: true,
-				description: 'Whether to return a simplified version of the response instead of the raw data',
+				description:
+					'Whether to return a simplified version of the response instead of the raw data',
 			},
 		],
 	};
@@ -91,7 +81,14 @@ export class SeaTableTrigger implements INodeType {
 		loadOptions: {
 			async getTableNames(this: ILoadOptionsFunctions) {
 				const returnData: INodePropertyOptions[] = [];
-				const { metadata: { tables } } = await seaTableApiRequest.call(this, {}, 'GET', `/dtable-server/api/v1/dtables/{{dtable_uuid}}/metadata`);
+				const {
+					metadata: { tables },
+				} = await seaTableApiRequest.call(
+					this,
+					{},
+					'GET',
+					'/dtable-server/api/v1/dtables/{{dtable_uuid}}/metadata',
+				);
 				for (const table of tables) {
 					returnData.push({
 						name: table.name,
@@ -111,29 +108,27 @@ export class SeaTableTrigger implements INodeType {
 		const ctx: ICtx = {};
 		const credentials = await this.getCredentials('seaTableApi');
 
-		const timezone = credentials.timezone as string || 'Europe/Berlin';
+		const timezone = (credentials.timezone as string) || 'Europe/Berlin';
 		const now = moment().utc().format();
-		const startDate = webhookData.lastTimeChecked as string || now;
+		const startDate = (webhookData.lastTimeChecked as string) || now;
 		const endDate = now;
 		webhookData.lastTimeChecked = endDate;
 
 		let rows;
 
-		const filterField = (event === 'rowCreated') ? '_ctime' : '_mtime';
+		const filterField = event === 'rowCreated' ? '_ctime' : '_mtime';
 
-		const endpoint = `/dtable-db/api/v1/query/{{dtable_uuid}}/`;
+		const endpoint = '/dtable-db/api/v1/query/{{dtable_uuid}}/';
 
 		if (this.getMode() === 'manual') {
-			rows = await seaTableApiRequest.call(this, ctx, 'POST', endpoint, { sql: `SELECT * FROM ${tableName} LIMIT 1` }) as IRowResponse;
+			rows = (await seaTableApiRequest.call(this, ctx, 'POST', endpoint, {
+				sql: `SELECT * FROM ${tableName} LIMIT 1`,
+			})) as IRowResponse;
 		} else {
 			rows = (await seaTableApiRequest.call(this, ctx, 'POST', endpoint, {
 				sql: `SELECT * FROM ${tableName}
-					WHERE ${filterField} BETWEEN "${moment(startDate)
-					.tz(timezone)
-					.format('YYYY-MM-D HH:mm:ss')}"
-					AND "${moment(endDate)
-					.tz(timezone)
-					.format('YYYY-MM-D HH:mm:ss')}"`,
+					WHERE ${filterField} BETWEEN "${moment(startDate).tz(timezone).format('YYYY-MM-D HH:mm:ss')}"
+					AND "${moment(endDate).tz(timezone).format('YYYY-MM-D HH:mm:ss')}"`,
 			})) as IRowResponse;
 		}
 
@@ -141,7 +136,7 @@ export class SeaTableTrigger implements INodeType {
 
 		if (rows.metadata && rows.results) {
 			const columns = getColumns(rows);
-			if (simple === true) {
+			if (simple) {
 				response = simplify(rows, columns);
 			} else {
 				response = rows.results;
@@ -150,9 +145,9 @@ export class SeaTableTrigger implements INodeType {
 			const allColumns = rows.metadata.map((meta) => meta.name);
 
 			response = response
-			//@ts-ignore
-			.map((row: IRow) => rowFormatColumns(row, allColumns))
-			.map((row: IRow) => ({ json: row }));
+				//@ts-ignore
+				.map((row: IRow) => rowFormatColumns(row, allColumns))
+				.map((row: IRow) => ({ json: row }));
 		}
 
 		if (Array.isArray(response) && response.length) {

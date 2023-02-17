@@ -1,27 +1,19 @@
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
-	IExecuteFunctions,
-	ILoadOptionsFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions, ILoadOptionsFunctions } from 'n8n-core';
 
-import {
-	IDataObject,
-	IHookFunctions,
-	IWebhookFunctions,
-	NodeApiError,
-} from 'n8n-workflow';
+import type { IDataObject, IHookFunctions, IWebhookFunctions } from 'n8n-workflow';
 
 const BEEMINDER_URI = 'https://www.beeminder.com/api/v1';
 
-export async function beeminderApiRequest(this: IExecuteFunctions | IWebhookFunctions | IHookFunctions | ILoadOptionsFunctions, method: string, endpoint: string, body: any = {}, query: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function beeminderApiRequest(
+	this: IExecuteFunctions | IWebhookFunctions | IHookFunctions | ILoadOptionsFunctions,
+	method: string,
+	endpoint: string,
 
-	const credentials = await this.getCredentials('beeminderApi') as IDataObject;
-
-	Object.assign(body, { auth_token: credentials.authToken });
-
+	body: any = {},
+	query: IDataObject = {},
+): Promise<any> {
 	const options: OptionsWithUri = {
 		method,
 		body,
@@ -38,15 +30,17 @@ export async function beeminderApiRequest(this: IExecuteFunctions | IWebhookFunc
 		delete options.qs;
 	}
 
-	try {
-		return await this.helpers.request!(options);
-	} catch (error) {
-		throw new NodeApiError(this.getNode(), error);
-	}
+	return this.helpers.requestWithAuthentication.call(this, 'beeminderApi', options);
 }
 
-export async function beeminderApiRequestAllItems(this: IExecuteFunctions | ILoadOptionsFunctions | IHookFunctions, method: string, endpoint: string, body: any = {}, query: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function beeminderApiRequestAllItems(
+	this: IExecuteFunctions | ILoadOptionsFunctions | IHookFunctions,
+	method: string,
+	endpoint: string,
 
+	body: any = {},
+	query: IDataObject = {},
+): Promise<any> {
 	const returnData: IDataObject[] = [];
 
 	let responseData;
@@ -55,9 +49,7 @@ export async function beeminderApiRequestAllItems(this: IExecuteFunctions | ILoa
 		responseData = await beeminderApiRequest.call(this, method, endpoint, body, query);
 		query.page++;
 		returnData.push.apply(returnData, responseData);
-	} while (
-		responseData.length !== 0
-	);
+	} while (responseData.length !== 0);
 
 	return returnData;
 }

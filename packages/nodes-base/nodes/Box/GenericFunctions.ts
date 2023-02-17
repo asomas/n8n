@@ -1,22 +1,25 @@
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
+import type {
 	IExecuteFunctions,
 	IExecuteSingleFunctions,
 	IHookFunctions,
 	ILoadOptionsFunctions,
 } from 'n8n-core';
 
-import {
-	IDataObject,
-	IOAuth2Options,
-	NodeApiError,
-} from 'n8n-workflow';
+import type { IDataObject, IOAuth2Options } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-export async function boxApiRequest(this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions | IHookFunctions, method: string, resource: string, body: any = {}, qs: IDataObject = {}, uri?: string, option: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function boxApiRequest(
+	this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions | IHookFunctions,
+	method: string,
+	resource: string,
 
+	body: any = {},
+	qs: IDataObject = {},
+	uri?: string,
+	option: IDataObject = {},
+): Promise<any> {
 	let options: OptionsWithUri = {
 		headers: {
 			'Content-Type': 'application/json',
@@ -40,14 +43,20 @@ export async function boxApiRequest(this: IExecuteFunctions | IExecuteSingleFunc
 
 		//@ts-ignore
 		return await this.helpers.requestOAuth2.call(this, 'boxOAuth2Api', options, oAuth2Options);
-
 	} catch (error) {
 		throw new NodeApiError(this.getNode(), error);
 	}
 }
 
-export async function boxApiRequestAllItems(this: IExecuteFunctions | ILoadOptionsFunctions | IHookFunctions, propertyName: string, method: string, endpoint: string, body: any = {}, query: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function boxApiRequestAllItems(
+	this: IExecuteFunctions | ILoadOptionsFunctions | IHookFunctions,
+	propertyName: string,
+	method: string,
+	endpoint: string,
 
+	body: any = {},
+	query: IDataObject = {},
+): Promise<any> {
 	const returnData: IDataObject[] = [];
 
 	let responseData;
@@ -55,11 +64,9 @@ export async function boxApiRequestAllItems(this: IExecuteFunctions | ILoadOptio
 	query.offset = 0;
 	do {
 		responseData = await boxApiRequest.call(this, method, endpoint, body, query);
-		query.offset = responseData['offset'] + query.limit;
+		query.offset = (responseData.offset as number) + query.limit;
 		returnData.push.apply(returnData, responseData[propertyName]);
-	} while (
-		responseData[propertyName].length !== 0
-	);
+	} while (responseData[propertyName].length !== 0);
 
 	return returnData;
 }

@@ -1,13 +1,8 @@
-import {
-	parse as urlParse,
-} from 'url';
+import { parse as urlParse } from 'url';
 
-import {
-	IHookFunctions,
-	IWebhookFunctions,
-} from 'n8n-core';
+import type { IHookFunctions, IWebhookFunctions } from 'n8n-core';
 
-import {
+import type {
 	IDataObject,
 	ILoadOptionsFunctions,
 	INodePropertyOptions,
@@ -16,9 +11,7 @@ import {
 	IWebhookResponseData,
 } from 'n8n-workflow';
 
-import {
-	mauticApiRequest,
-} from './GenericFunctions';
+import { mauticApiRequest } from './GenericFunctions';
 
 export class MauticTrigger implements INodeType {
 	description: INodeTypeDescription = {
@@ -39,9 +32,7 @@ export class MauticTrigger implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						authentication: [
-							'credentials',
-						],
+						authentication: ['credentials'],
 					},
 				},
 			},
@@ -50,9 +41,7 @@ export class MauticTrigger implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						authentication: [
-							'oAuth2',
-						],
+						authentication: ['oAuth2'],
 					},
 				},
 			},
@@ -86,6 +75,8 @@ export class MauticTrigger implements INodeType {
 				displayName: 'Event Names or IDs',
 				name: 'events',
 				type: 'multiOptions',
+				description:
+					'Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code-examples/expressions/">expression</a>',
 				required: true,
 				typeOptions: {
 					loadOptionsMethod: 'getEvents',
@@ -111,6 +102,7 @@ export class MauticTrigger implements INodeType {
 			},
 		],
 	};
+
 	methods = {
 		loadOptions: {
 			// Get all the events to display them to user so that he can
@@ -132,6 +124,7 @@ export class MauticTrigger implements INodeType {
 			},
 		},
 	};
+
 	// @ts-ignore
 	webhookMethods = {
 		default: {
@@ -182,9 +175,7 @@ export class MauticTrigger implements INodeType {
 	async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
 		const req = this.getRequestObject();
 		return {
-			workflowData: [
-				this.helpers.returnJsonArray(req.body),
-			],
+			workflowData: [this.helpers.returnJsonArray(req.body)],
 		};
 	}
 }

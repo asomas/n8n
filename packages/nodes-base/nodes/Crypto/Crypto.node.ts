@@ -1,12 +1,8 @@
-import {
-	set,
-} from 'lodash';
+import { set } from 'lodash';
 
-import {
-	IExecuteFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions } from 'n8n-core';
 
-import {
+import type {
 	ILoadOptionsFunctions,
 	INodeExecutionData,
 	INodePropertyOptions,
@@ -14,15 +10,10 @@ import {
 	INodeTypeDescription,
 	JsonObject,
 } from 'n8n-workflow';
+import { deepCopy } from 'n8n-workflow';
 
-import {
-	BinaryToTextEncoding,
-	createHash,
-	createHmac,
-	createSign,
-	getHashes,
-	randomBytes,
-} from 'crypto';
+import type { BinaryToTextEncoding } from 'crypto';
+import { createHash, createHmac, createSign, getHashes, randomBytes } from 'crypto';
 
 import { v4 as uuid } from 'uuid';
 
@@ -51,21 +42,25 @@ export class Crypto implements INodeType {
 						name: 'Generate',
 						description: 'Generate random string',
 						value: 'generate',
+						action: 'Generate random string',
 					},
 					{
 						name: 'Hash',
 						description: 'Hash a text in a specified format',
 						value: 'hash',
+						action: 'Hash a text in a specified format',
 					},
 					{
 						name: 'Hmac',
 						description: 'Hmac a text in a specified format',
 						value: 'hmac',
+						action: 'HMAC a text in a specified format',
 					},
 					{
 						name: 'Sign',
 						description: 'Sign a string using a private key',
 						value: 'sign',
+						action: 'Sign a string using a private key',
 					},
 				],
 				default: 'hash',
@@ -75,9 +70,7 @@ export class Crypto implements INodeType {
 				name: 'type',
 				displayOptions: {
 					show: {
-						action: [
-							'hash',
-						],
+						action: ['hash'],
 					},
 				},
 				type: 'options',
@@ -89,6 +82,18 @@ export class Crypto implements INodeType {
 					{
 						name: 'SHA256',
 						value: 'SHA256',
+					},
+					{
+						name: 'SHA3-256',
+						value: 'SHA3-256',
+					},
+					{
+						name: 'SHA3-384',
+						value: 'SHA3-384',
+					},
+					{
+						name: 'SHA3-512',
+						value: 'SHA3-512',
 					},
 					{
 						name: 'SHA384',
@@ -108,9 +113,7 @@ export class Crypto implements INodeType {
 				name: 'value',
 				displayOptions: {
 					show: {
-						action: [
-							'hash',
-						],
+						action: ['hash'],
 					},
 				},
 				type: 'string',
@@ -126,9 +129,7 @@ export class Crypto implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						action: [
-							'hash',
-						],
+						action: ['hash'],
 					},
 				},
 				description: 'Name of the property to which to write the hash',
@@ -138,9 +139,7 @@ export class Crypto implements INodeType {
 				name: 'encoding',
 				displayOptions: {
 					show: {
-						action: [
-							'hash',
-						],
+						action: ['hash'],
 					},
 				},
 				type: 'options',
@@ -162,9 +161,7 @@ export class Crypto implements INodeType {
 				name: 'type',
 				displayOptions: {
 					show: {
-						action: [
-							'hmac',
-						],
+						action: ['hmac'],
 					},
 				},
 				type: 'options',
@@ -176,6 +173,18 @@ export class Crypto implements INodeType {
 					{
 						name: 'SHA256',
 						value: 'SHA256',
+					},
+					{
+						name: 'SHA3-256',
+						value: 'SHA3-256',
+					},
+					{
+						name: 'SHA3-384',
+						value: 'SHA3-384',
+					},
+					{
+						name: 'SHA3-512',
+						value: 'SHA3-512',
 					},
 					{
 						name: 'SHA384',
@@ -195,9 +204,7 @@ export class Crypto implements INodeType {
 				name: 'value',
 				displayOptions: {
 					show: {
-						action: [
-							'hmac',
-						],
+						action: ['hmac'],
 					},
 				},
 				type: 'string',
@@ -213,9 +220,7 @@ export class Crypto implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						action: [
-							'hmac',
-						],
+						action: ['hmac'],
 					},
 				},
 				description: 'Name of the property to which to write the hmac',
@@ -225,9 +230,7 @@ export class Crypto implements INodeType {
 				name: 'secret',
 				displayOptions: {
 					show: {
-						action: [
-							'hmac',
-						],
+						action: ['hmac'],
 					},
 				},
 				type: 'string',
@@ -239,9 +242,7 @@ export class Crypto implements INodeType {
 				name: 'encoding',
 				displayOptions: {
 					show: {
-						action: [
-							'hmac',
-						],
+						action: ['hmac'],
 					},
 				},
 				type: 'options',
@@ -263,9 +264,7 @@ export class Crypto implements INodeType {
 				name: 'value',
 				displayOptions: {
 					show: {
-						action: [
-							'sign',
-						],
+						action: ['sign'],
 					},
 				},
 				type: 'string',
@@ -281,9 +280,7 @@ export class Crypto implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						action: [
-							'sign',
-						],
+						action: ['sign'],
 					},
 				},
 				description: 'Name of the property to which to write the signed value',
@@ -293,13 +290,12 @@ export class Crypto implements INodeType {
 				name: 'algorithm',
 				displayOptions: {
 					show: {
-						action: [
-							'sign',
-						],
+						action: ['sign'],
 					},
 				},
 				type: 'options',
-				description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/nodes/expressions.html#expressions">expression</a>',
+				description:
+					'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code-examples/expressions/">expression</a>',
 				typeOptions: {
 					loadOptionsMethod: 'getHashes',
 				},
@@ -311,9 +307,7 @@ export class Crypto implements INodeType {
 				name: 'encoding',
 				displayOptions: {
 					show: {
-						action: [
-							'sign',
-						],
+						action: ['sign'],
 					},
 				},
 				type: 'options',
@@ -335,15 +329,10 @@ export class Crypto implements INodeType {
 				name: 'privateKey',
 				displayOptions: {
 					show: {
-						action: [
-							'sign',
-						],
+						action: ['sign'],
 					},
 				},
 				type: 'string',
-				typeOptions: {
-					alwaysOpenEditWindow: true,
-				},
 				description: 'Private key to use when signing the string',
 				default: '',
 				required: true,
@@ -356,9 +345,7 @@ export class Crypto implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						action: [
-							'generate',
-						],
+						action: ['generate'],
 					},
 				},
 				description: 'Name of the property to which to write the random string',
@@ -368,9 +355,7 @@ export class Crypto implements INodeType {
 				name: 'encodingType',
 				displayOptions: {
 					show: {
-						action: [
-							'generate',
-						],
+						action: ['generate'],
 					},
 				},
 				type: 'options',
@@ -404,14 +389,8 @@ export class Crypto implements INodeType {
 				description: 'Length of the generated string',
 				displayOptions: {
 					show: {
-						action: [
-							'generate',
-						],
-						encodingType: [
-							'ascii',
-							'base64',
-							'hex',
-						],
+						action: ['generate'],
+						encodingType: ['ascii', 'base64', 'hex'],
 					},
 				},
 			},
@@ -447,24 +426,27 @@ export class Crypto implements INodeType {
 
 		let item: INodeExecutionData;
 		for (let i = 0; i < length; i++) {
-
 			try {
-
 				item = items[i];
-				const dataPropertyName = this.getNodeParameter('dataPropertyName', i) as string;
+				const dataPropertyName = this.getNodeParameter('dataPropertyName', i);
 				const value = this.getNodeParameter('value', i, '') as string;
 				let newValue;
 
 				if (action === 'generate') {
-					const encodingType = this.getNodeParameter('encodingType', i) as string;
+					const encodingType = this.getNodeParameter('encodingType', i);
 					if (encodingType === 'uuid') {
 						newValue = uuid();
 					} else {
 						const stringLength = this.getNodeParameter('stringLength', i) as number;
 						if (encodingType === 'base64') {
-							newValue = randomBytes(stringLength).toString(encodingType as BufferEncoding).replace(/\W/g, '').slice(0, stringLength);
+							newValue = randomBytes(stringLength)
+								.toString(encodingType as BufferEncoding)
+								.replace(/\W/g, '')
+								.slice(0, stringLength);
 						} else {
-							newValue = randomBytes(stringLength).toString(encodingType as BufferEncoding).slice(0, stringLength);
+							newValue = randomBytes(stringLength)
+								.toString(encodingType as BufferEncoding)
+								.slice(0, stringLength);
 						}
 					}
 				}
@@ -484,7 +466,7 @@ export class Crypto implements INodeType {
 					const encoding = this.getNodeParameter('encoding', i) as BinaryToTextEncoding;
 					const privateKey = this.getNodeParameter('privateKey', i) as string;
 					const sign = createSign(algorithm);
-					sign.write(value as string);
+					sign.write(value);
 					sign.end();
 					newValue = sign.sign(privateKey, encoding);
 				}
@@ -493,7 +475,7 @@ export class Crypto implements INodeType {
 				if (dataPropertyName.includes('.')) {
 					// Uses dot notation so copy all data
 					newItem = {
-						json: JSON.parse(JSON.stringify(item.json)),
+						json: deepCopy(item.json),
 						pairedItem: {
 							item: i,
 						},
@@ -515,7 +497,6 @@ export class Crypto implements INodeType {
 				set(newItem, `json.${dataPropertyName}`, newValue);
 
 				returnData.push(newItem);
-
 			} catch (error) {
 				if (this.continueOnFail()) {
 					returnData.push({

@@ -1,19 +1,18 @@
 import get from 'lodash.get';
-import {
+import type {
 	CredentialInformation,
 	IAdditionalCredentialOptions,
 	IAllExecuteFunctions,
 	IContextObject,
 	ICredentialDataDecryptedObject,
-	ICredentials,
 	ICredentialsEncrypted,
-	ICredentialsHelper,
 	IDataObject,
 	IExecuteData,
 	IExecuteFunctions,
 	IExecuteResponsePromiseData,
 	IExecuteSingleFunctions,
 	IExecuteWorkflowInfo,
+	IHttpRequestHelper,
 	IHttpRequestOptions,
 	IN8nHttpFullResponse,
 	IN8nHttpResponse,
@@ -24,20 +23,21 @@ import {
 	INodeType,
 	INodeTypeData,
 	INodeTypes,
-	INodeVersionedType,
+	IVersionedNodeType,
 	IRunExecutionData,
 	ITaskDataConnections,
 	IWorkflowBase,
 	IWorkflowDataProxyAdditionalKeys,
 	IWorkflowDataProxyData,
 	IWorkflowExecuteAdditionalData,
-	NodeHelpers,
 	NodeParameterValue,
-	Workflow,
-	WorkflowDataProxy,
 	WorkflowExecuteMode,
-	WorkflowHooks,
-} from '../src';
+} from '@/Interfaces';
+import { ICredentials, ICredentialsHelper } from '@/Interfaces';
+import { Workflow } from '@/Workflow';
+import { WorkflowDataProxy } from '@/WorkflowDataProxy';
+import { WorkflowHooks } from '@/WorkflowHooks';
+import * as NodeHelpers from '@/NodeHelpers';
 
 export interface INodeTypesObject {
 	[key: string]: INodeType;
@@ -111,6 +111,16 @@ export class CredentialsHelper extends ICredentialsHelper {
 		return requestParams;
 	}
 
+	async preAuthentication(
+		helpers: IHttpRequestHelper,
+		credentials: ICredentialDataDecryptedObject,
+		typeName: string,
+		node: INode,
+		credentialsExpired: boolean,
+	): Promise<{ updatedCredentials: boolean; data: ICredentialDataDecryptedObject }> {
+		return { updatedCredentials: false, data: {} };
+	}
+
 	getParentTypes(name: string): string[] {
 		return [];
 	}
@@ -152,7 +162,7 @@ export function getNodeParameter(
 ): NodeParameterValue | INodeParameters | NodeParameterValue[] | INodeParameters[] | object {
 	const nodeType = workflow.nodeTypes.getByNameAndVersion(node.type, node.typeVersion);
 	if (nodeType === undefined) {
-		throw new Error(`Node type "${node.type}" is not known so can not return paramter value!`);
+		throw new Error(`Node type "${node.type}" is not known so can not return parameter value!`);
 	}
 
 	const value = get(node.parameters, parameterName, fallbackValue);
@@ -206,7 +216,7 @@ export function getExecuteFunctions(
 				workflowInfo: IExecuteWorkflowInfo,
 				inputData?: INodeExecutionData[],
 			): Promise<any> {
-				return additionalData.executeWorkflow(workflowInfo, additionalData, inputData);
+				return additionalData.executeWorkflow(workflowInfo, additionalData, { inputData });
 			},
 			getContext(type: string): IContextObject {
 				return NodeHelpers.getContext(runExecutionData, type, node);
@@ -318,7 +328,7 @@ export function getExecuteFunctions(
 					}
 				} catch (error) {
 					// eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-					console.error(`There was a problem sending messsage to UI: ${error.message}`);
+					console.error(`There was a problem sending message to UI: ${error.message}`);
 				}
 			},
 			async sendResponse(response: IExecuteResponsePromiseData): Promise<void> {
@@ -663,14 +673,8 @@ class NodeTypesClass implements INodeTypes {
 		},
 	};
 
-	async init(nodeTypes: INodeTypeData): Promise<void> {}
-
-	getAll(): INodeType[] {
-		return Object.values(this.nodeTypes).map((data) => NodeHelpers.getVersionedNodeType(data.type));
-	}
-
-	getByName(nodeType: string): INodeType | INodeVersionedType | undefined {
-		return this.getByNameAndVersion(nodeType);
+	getByName(nodeType: string): INodeType | IVersionedNodeType {
+		return this.nodeTypes[nodeType].type;
 	}
 
 	getByNameAndVersion(nodeType: string, version?: number): INodeType {

@@ -1,8 +1,6 @@
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
+import type {
 	IExecuteFunctions,
 	IExecuteSingleFunctions,
 	IHookFunctions,
@@ -10,21 +8,37 @@ import {
 	IWebhookFunctions,
 } from 'n8n-core';
 
-import {
+import type {
 	ICredentialDataDecryptedObject,
 	ICredentialTestFunctions,
 	IDataObject,
 	INodeProperties,
-	NodeApiError,
+	IPairedItemData,
 } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-export async function supabaseApiRequest(this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions | IHookFunctions | IWebhookFunctions, method: string, resource: string, body: any = {}, qs: IDataObject = {}, uri?: string, headers: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
-	const credentials = await this.getCredentials('supabaseApi') as { host: string, serviceRole: string };
+export async function supabaseApiRequest(
+	this:
+		| IExecuteFunctions
+		| IExecuteSingleFunctions
+		| ILoadOptionsFunctions
+		| IHookFunctions
+		| IWebhookFunctions,
+	method: string,
+	resource: string,
+
+	body: any = {},
+	qs: IDataObject = {},
+	uri?: string,
+	headers: IDataObject = {},
+): Promise<any> {
+	const credentials = (await this.getCredentials('supabaseApi')) as {
+		host: string;
+		serviceRole: string;
+	};
 
 	const options: OptionsWithUri = {
 		headers: {
-			apikey: credentials.serviceRole,
-			Authorization: 'Bearer ' + credentials.serviceRole,
 			Prefer: 'return=representation',
 		},
 		method,
@@ -40,19 +54,17 @@ export async function supabaseApiRequest(this: IExecuteFunctions | IExecuteSingl
 		if (Object.keys(body).length === 0) {
 			delete options.body;
 		}
-		//@ts-ignore
-		return await this.helpers?.request(options);
-
+		return await this.helpers.requestWithAuthentication.call(this, 'supabaseApi', options);
 	} catch (error) {
 		throw new NodeApiError(this.getNode(), error);
 	}
 }
 
 const mapOperations: { [key: string]: string } = {
-	'create': 'created',
-	'update': 'updated',
-	'getAll': 'retrieved',
-	'delete': 'deleted',
+	create: 'created',
+	update: 'updated',
+	getAll: 'retrieved',
+	delete: 'deleted',
 };
 
 export function getFilters(
@@ -62,6 +74,7 @@ export function getFilters(
 		includeNoneOption = true,
 		filterTypeDisplayName = 'Filter',
 		filterFixedCollectionDisplayName = 'Filters',
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		filterStringDisplayName = 'Filters (String)',
 		mustMatchOptions = [
 			{
@@ -73,7 +86,8 @@ export function getFilters(
 				value: 'allFilters',
 			},
 		],
-	}): INodeProperties[] {
+	},
+): INodeProperties[] {
 	return [
 		{
 			displayName: filterTypeDisplayName,
@@ -107,9 +121,7 @@ export function getFilters(
 				show: {
 					resource: resources,
 					operation: operations,
-					filterType: [
-						'manual',
-					],
+					filterType: ['manual'],
 				},
 			},
 			default: 'anyFilter',
@@ -125,9 +137,7 @@ export function getFilters(
 				show: {
 					resource: resources,
 					operation: operations,
-					filterType: [
-						'manual',
-					],
+					filterType: ['manual'],
 				},
 			},
 			default: {},
@@ -141,11 +151,10 @@ export function getFilters(
 							displayName: 'Field Name or ID',
 							name: 'keyName',
 							type: 'options',
-							description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/nodes/expressions.html#expressions">expression</a>',
+							description:
+								'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code-examples/expressions/">expression</a>',
 							typeOptions: {
-								loadOptionsDependsOn: [
-									'tableId',
-								],
+								loadOptionsDependsOn: ['tableId'],
 								loadOptionsMethod: 'getTableColumns',
 							},
 							default: '',
@@ -207,9 +216,7 @@ export function getFilters(
 							type: 'options',
 							displayOptions: {
 								show: {
-									condition: [
-										'fullText',
-									],
+									condition: ['fullText'],
 								},
 							},
 							options: [
@@ -241,19 +248,18 @@ export function getFilters(
 					],
 				},
 			],
-			description: `Filter to decide which rows get ${mapOperations[operations[0] as string]}`,
+			description: `Filter to decide which rows get ${mapOperations[operations[0]]}`,
 		},
 		{
-			displayName: 'See <a href="https://postgrest.org/en/v9.0/api.html#horizontal-filtering-rows" target="_blank">PostgREST guide</a> to creating filters',
+			displayName:
+				'See <a href="https://postgrest.org/en/v9.0/api.html#horizontal-filtering-rows" target="_blank">PostgREST guide</a> to creating filters',
 			name: 'jsonNotice',
 			type: 'notice',
 			displayOptions: {
 				show: {
 					resource: resources,
 					operation: operations,
-					filterType: [
-						'string',
-					],
+					filterType: ['string'],
 				},
 			},
 			default: '',
@@ -262,16 +268,11 @@ export function getFilters(
 			displayName: 'Filters (String)',
 			name: 'filterString',
 			type: 'string',
-			typeOptions: {
-				alwaysOpenEditWindow: true,
-			},
 			displayOptions: {
 				show: {
 					resource: resources,
 					operation: operations,
-					filterType: [
-						'string',
-					],
+					filterType: ['string'],
 				},
 			},
 			default: '',
@@ -282,7 +283,9 @@ export function getFilters(
 
 export const buildQuery = (obj: IDataObject, value: IDataObject) => {
 	if (value.condition === 'fullText') {
-		return Object.assign(obj, { [`${value.keyName}`]: `${value.searchFunction}.${value.keyValue}` });
+		return Object.assign(obj, {
+			[`${value.keyName}`]: `${value.searchFunction}.${value.keyValue}`,
+		});
 	}
 	return Object.assign(obj, { [`${value.keyName}`]: `${value.condition}.${value.keyValue}` });
 };
@@ -300,12 +303,12 @@ export const buildGetQuery = (obj: IDataObject, value: IDataObject) => {
 
 export async function validateCredentials(
 	this: ICredentialTestFunctions,
-	decryptedCredentials: ICredentialDataDecryptedObject): Promise<any> { // tslint:disable-line:no-any
-
+	decryptedCredentials: ICredentialDataDecryptedObject,
+): Promise<any> {
 	const credentials = decryptedCredentials;
 
 	const { serviceRole } = credentials as {
-		serviceRole: string,
+		serviceRole: string;
 	};
 
 	const options: OptionsWithUri = {
@@ -318,5 +321,13 @@ export async function validateCredentials(
 		json: true,
 	};
 
-	return this.helpers.request!(options);
+	return this.helpers.request(options);
+}
+
+export function mapPairedItemsFrom<T>(iterable: Iterable<T> | ArrayLike<T>): IPairedItemData[] {
+	return Array.from(iterable, (_, i) => i).map((index) => {
+		return {
+			item: index,
+		};
+	});
 }

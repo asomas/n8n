@@ -1,65 +1,46 @@
-/* eslint-disable import/no-cycle */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import TelemetryClient from '@rudderstack/rudder-sdk-node';
-import { IDataObject, LoggerProxy } from 'n8n-workflow';
-import * as config from '../../config';
-import { getLogger } from '../Logger';
+import type RudderStack from '@rudderstack/rudder-sdk-node';
+import type { PostHog } from 'posthog-node';
+import type { ITelemetryTrackProperties } from 'n8n-workflow';
+import { LoggerProxy } from 'n8n-workflow';
+import config from '@/config';
+import type { IExecutionTrackProperties } from '@/Interfaces';
+import { getLogger } from '@/Logger';
+import { getLicense } from '@/License';
+import { LicenseService } from '@/license/License.service';
+import { N8N_VERSION } from '@/constants';
 
-type CountBufferItemKey =
-	| 'manual_success_count'
-	| 'manual_error_count'
-	| 'prod_success_count'
-	| 'prod_error_count';
+type ExecutionTrackDataKey = 'manual_error' | 'manual_success' | 'prod_error' | 'prod_success';
 
-type FirstExecutionItemKey =
-	| 'first_manual_success'
-	| 'first_manual_error'
-	| 'first_prod_success'
-	| 'first_prod_error';
-
-type IExecutionCountsBufferItem = {
-	[key in CountBufferItemKey]: number;
-};
-
-interface IExecutionCountsBuffer {
-	[workflowId: string]: IExecutionCountsBufferItem;
+interface IExecutionTrackData {
+	count: number;
+	first: Date;
 }
 
-type IFirstExecutions = {
-	[key in FirstExecutionItemKey]: Date | undefined;
-};
-
 interface IExecutionsBuffer {
-	counts: IExecutionCountsBuffer;
-	firstExecutions: IFirstExecutions;
+	[workflowId: string]: {
+		manual_error?: IExecutionTrackData;
+		manual_success?: IExecutionTrackData;
+		prod_error?: IExecutionTrackData;
+		prod_success?: IExecutionTrackData;
+		user_id: string | undefined;
+	};
 }
 
 export class Telemetry {
-	private client?: TelemetryClient;
+	private rudderStack?: RudderStack;
 
-	private instanceId: string;
-
-	private versionCli: string;
+	private postHog?: PostHog;
 
 	private pulseIntervalReference: NodeJS.Timeout;
 
-	private executionCountsBuffer: IExecutionsBuffer = {
-		counts: {},
-		firstExecutions: {
-			first_manual_error: undefined,
-			first_manual_success: undefined,
-			first_prod_error: undefined,
-			first_prod_success: undefined,
-		},
-	};
+	private executionCountsBuffer: IExecutionsBuffer = {};
 
-	constructor(instanceId: string, versionCli: string) {
-		this.instanceId = instanceId;
-		this.versionCli = versionCli;
+	constructor(private instanceId: string) {}
 
+	async init() {
 		const enabled = config.getEnv('diagnostics.enabled');
-		const logLevel = config.getEnv('logs.level');
 		if (enabled) {
 			const conf = config.getEnv('diagnostics.config.backend');
 			const [key, url] = conf.split(';');
@@ -71,85 +52,85 @@ export class Telemetry {
 				return;
 			}
 
-			this.client = new TelemetryClient(key, url, { logLevel });
+			const logLevel = config.getEnv('logs.level');
 
-			this.pulseIntervalReference = setInterval(async () => {
-				void this.pulse();
-			}, 6 * 60 * 60 * 1000); // every 6 hours
+			// eslint-disable-next-line @typescript-eslint/naming-convention
+			const { default: RudderStack } = await import('@rudderstack/rudder-sdk-node');
+			this.rudderStack = new RudderStack(key, url, { logLevel });
+
+			// eslint-disable-next-line @typescript-eslint/naming-convention
+			const { PostHog } = await import('posthog-node');
+			this.postHog = new PostHog(config.getEnv('diagnostics.config.posthog.apiKey'), {
+				host: config.getEnv('diagnostics.config.posthog.apiHost'),
+			});
+
+			this.startPulse();
 		}
 	}
 
+	private startPulse() {
+		this.pulseIntervalReference = setInterval(async () => {
+			void this.pulse();
+		}, 6 * 60 * 60 * 1000); // every 6 hours
+	}
+
 	private async pulse(): Promise<unknown> {
-		if (!this.client) {
+		if (!this.rudderStack) {
 			return Promise.resolve();
 		}
 
-		const allPromises = Object.keys(this.executionCountsBuffer.counts).map(async (workflowId) => {
-			const promise = this.track('Workflow execution count', {
-				version_cli: this.versionCli,
-				workflow_id: workflowId,
-				...this.executionCountsBuffer.counts[workflowId],
-				...this.executionCountsBuffer.firstExecutions,
-			});
-
-			this.executionCountsBuffer.counts[workflowId].manual_error_count = 0;
-			this.executionCountsBuffer.counts[workflowId].manual_success_count = 0;
-			this.executionCountsBuffer.counts[workflowId].prod_error_count = 0;
-			this.executionCountsBuffer.counts[workflowId].prod_success_count = 0;
+		const allPromises = Object.keys(this.executionCountsBuffer).map(async (workflowId) => {
+			const promise = this.track(
+				'Workflow execution count',
+				{
+					event_version: '2',
+					workflow_id: workflowId,
+					...this.executionCountsBuffer[workflowId],
+				},
+				{ withPostHog: true },
+			);
 
 			return promise;
 		});
 
-		allPromises.push(this.track('pulse', { version_cli: this.versionCli }));
+		this.executionCountsBuffer = {};
+
+		// License info
+		const pulsePacket = {
+			plan_name_current: getLicense().getPlanName(),
+			quota: getLicense().getTriggerLimit(),
+			usage: await LicenseService.getActiveTriggerCount(),
+		};
+		allPromises.push(this.track('pulse', pulsePacket));
 		return Promise.all(allPromises);
 	}
 
-	async trackWorkflowExecution(properties: IDataObject): Promise<void> {
-		if (this.client) {
-			const workflowId = properties.workflow_id as string;
-			this.executionCountsBuffer.counts[workflowId] = this.executionCountsBuffer.counts[
-				workflowId
-			] ?? {
-				manual_error_count: 0,
-				manual_success_count: 0,
-				prod_error_count: 0,
-				prod_success_count: 0,
+	async trackWorkflowExecution(properties: IExecutionTrackProperties): Promise<void> {
+		if (this.rudderStack) {
+			const execTime = new Date();
+			const workflowId = properties.workflow_id;
+
+			this.executionCountsBuffer[workflowId] = this.executionCountsBuffer[workflowId] ?? {
+				user_id: properties.user_id,
 			};
 
-			let countKey: CountBufferItemKey;
-			let firstExecKey: FirstExecutionItemKey;
+			const key: ExecutionTrackDataKey = `${properties.is_manual ? 'manual' : 'prod'}_${
+				properties.success ? 'success' : 'error'
+			}`;
 
-			if (
-				properties.success === false &&
-				properties.error_node_type &&
-				(properties.error_node_type as string).startsWith('n8n-nodes-base')
-			) {
-				// errored exec
-				void this.track('Workflow execution errored', properties);
-
-				if (properties.is_manual) {
-					firstExecKey = 'first_manual_error';
-					countKey = 'manual_error_count';
-				} else {
-					firstExecKey = 'first_prod_error';
-					countKey = 'prod_error_count';
-				}
-			} else if (properties.is_manual) {
-				countKey = 'manual_success_count';
-				firstExecKey = 'first_manual_success';
+			if (!this.executionCountsBuffer[workflowId][key]) {
+				this.executionCountsBuffer[workflowId][key] = {
+					count: 1,
+					first: execTime,
+				};
 			} else {
-				countKey = 'prod_success_count';
-				firstExecKey = 'first_prod_success';
+				// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+				this.executionCountsBuffer[workflowId][key]!.count++;
 			}
 
-			if (
-				!this.executionCountsBuffer.firstExecutions[firstExecKey] &&
-				this.executionCountsBuffer.counts[workflowId][countKey] === 0
-			) {
-				this.executionCountsBuffer.firstExecutions[firstExecKey] = new Date();
+			if (!properties.success && properties.error_node_type?.startsWith('n8n-nodes-base')) {
+				void this.track('Workflow execution errored', properties);
 			}
-
-			this.executionCountsBuffer.counts[workflowId][countKey]++;
 		}
 	}
 
@@ -157,21 +138,26 @@ export class Telemetry {
 		clearInterval(this.pulseIntervalReference);
 		void this.track('User instance stopped');
 		return new Promise<void>((resolve) => {
-			if (this.client) {
-				this.client.flush(resolve);
+			if (this.postHog) {
+				this.postHog.shutdown();
+			}
+
+			if (this.rudderStack) {
+				this.rudderStack.flush(resolve);
 			} else {
 				resolve();
 			}
 		});
 	}
 
-	async identify(traits?: IDataObject): Promise<void> {
+	async identify(traits?: {
+		[key: string]: string | number | boolean | object | undefined | null;
+	}): Promise<void> {
 		return new Promise<void>((resolve) => {
-			if (this.client) {
-				this.client.identify(
+			if (this.rudderStack) {
+				this.rudderStack.identify(
 					{
 						userId: this.instanceId,
-						anonymousId: '000000000000',
 						traits: {
 							...traits,
 							instanceId: this.instanceId,
@@ -187,24 +173,53 @@ export class Telemetry {
 
 	async track(
 		eventName: string,
-		properties: { [key: string]: unknown; user_id?: string } = {},
+		properties: ITelemetryTrackProperties = {},
+		{ withPostHog } = { withPostHog: false }, // whether to additionally track with PostHog
 	): Promise<void> {
 		return new Promise<void>((resolve) => {
-			if (this.client) {
+			if (this.rudderStack) {
 				const { user_id } = properties;
-				Object.assign(properties, { instance_id: this.instanceId });
-				this.client.track(
-					{
-						userId: `${this.instanceId}${user_id ? `#${user_id}` : ''}`,
-						anonymousId: '000000000000',
-						event: eventName,
-						properties,
-					},
-					resolve,
-				);
-			} else {
-				resolve();
+				const updatedProperties: ITelemetryTrackProperties = {
+					...properties,
+					instance_id: this.instanceId,
+					version_cli: N8N_VERSION,
+				};
+
+				const payload = {
+					userId: `${this.instanceId}${user_id ? `#${user_id}` : ''}`,
+					event: eventName,
+					properties: updatedProperties,
+				};
+
+				if (withPostHog) {
+					this.postHog?.capture({
+						distinctId: payload.userId,
+						sendFeatureFlags: true,
+						...payload,
+					});
+				}
+
+				return this.rudderStack.track(payload, resolve);
 			}
+
+			return resolve();
 		});
+	}
+
+	async isFeatureFlagEnabled(
+		featureFlagName: string,
+		{ user_id: userId }: ITelemetryTrackProperties = {},
+	): Promise<boolean | undefined> {
+		if (!this.postHog) return Promise.resolve(false);
+
+		const fullId = [this.instanceId, userId].join('#');
+
+		return this.postHog.isFeatureEnabled(featureFlagName, fullId);
+	}
+
+	// test helpers
+
+	getCountsBuffer(): IExecutionsBuffer {
+		return this.executionCountsBuffer;
 	}
 }

@@ -1,21 +1,14 @@
-import {
-	IHookFunctions,
-	IWebhookFunctions,
-} from 'n8n-core';
+import type { IHookFunctions, IWebhookFunctions } from 'n8n-core';
 
-import {
+import type {
 	IDataObject,
 	INodeType,
 	INodeTypeDescription,
 	IWebhookResponseData,
-	NodeOperationError,
 } from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
 
-import {
-	affinityApiRequest,
-	eventsExist,
-	mapResource,
-} from './GenericFunctions';
+import { affinityApiRequest, eventsExist, mapResource } from './GenericFunctions';
 
 export class AffinityTrigger implements INodeType {
 	description: INodeTypeDescription = {
@@ -27,7 +20,7 @@ export class AffinityTrigger implements INodeType {
 		version: 1,
 		description: 'Handle Affinity events via webhooks',
 		defaults: {
-			name: 'Affinity-Trigger',
+			name: 'Affinity Trigger',
 		},
 		inputs: [],
 		outputs: ['main'],
@@ -157,7 +150,6 @@ export class AffinityTrigger implements INodeType {
 				description: 'Webhook events that will be enabled for that endpoint',
 			},
 		],
-
 	};
 
 	// @ts-ignore (because of request)
@@ -188,7 +180,10 @@ export class AffinityTrigger implements INodeType {
 				const webhookUrl = this.getNodeWebhookUrl('default') as string;
 
 				if (webhookUrl.includes('%20')) {
-					throw new NodeOperationError(this.getNode(), 'The name of the Affinity Trigger Node is not allowed to contain any spaces!');
+					throw new NodeOperationError(
+						this.getNode(),
+						'The name of the Affinity Trigger Node is not allowed to contain any spaces!',
+					);
 				}
 
 				const events = this.getNodeParameter('events') as string[];
@@ -214,7 +209,6 @@ export class AffinityTrigger implements INodeType {
 			async delete(this: IHookFunctions): Promise<boolean> {
 				const webhookData = this.getWorkflowStaticData('node');
 				if (webhookData.webhookId !== undefined) {
-
 					const endpoint = `/webhook/${webhookData.webhookId}`;
 
 					const responseData = await affinityApiRequest.call(this, 'DELETE', endpoint);
@@ -249,9 +243,7 @@ export class AffinityTrigger implements INodeType {
 		}
 
 		return {
-			workflowData: [
-				this.helpers.returnJsonArray(responseData),
-			],
+			workflowData: [this.helpers.returnJsonArray(responseData)],
 		};
 	}
 }

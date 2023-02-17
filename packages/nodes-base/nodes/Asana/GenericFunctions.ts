@@ -1,30 +1,26 @@
-import {
-	IExecuteFunctions,
-	IHookFunctions,
-	ILoadOptionsFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions, IHookFunctions, ILoadOptionsFunctions } from 'n8n-core';
 
-import {
+import type {
 	IDataObject,
 	IHttpRequestMethods,
 	IHttpRequestOptions,
 	INodePropertyOptions,
 } from 'n8n-workflow';
 
-import {
-	get,
-} from 'lodash';
+import { get } from 'lodash';
 
 /**
  * Make an API request to Asana
  *
- * @param {IHookFunctions} this
- * @param {string} method
- * @param {string} url
- * @param {object} body
- * @returns {Promise<any>}
  */
-export async function asanaApiRequest(this: IHookFunctions | IExecuteFunctions | ILoadOptionsFunctions, method: IHttpRequestMethods, endpoint: string, body: object, query?: IDataObject, uri?: string | undefined): Promise<any> { // tslint:disable-line:no-any
+export async function asanaApiRequest(
+	this: IHookFunctions | IExecuteFunctions | ILoadOptionsFunctions,
+	method: IHttpRequestMethods,
+	endpoint: string,
+	body: object,
+	query?: IDataObject,
+	uri?: string | undefined,
+): Promise<any> {
 	const authenticationMethod = this.getNodeParameter('authentication', 0) as string;
 
 	const options: IHttpRequestOptions = {
@@ -40,8 +36,14 @@ export async function asanaApiRequest(this: IHookFunctions | IExecuteFunctions |
 	return this.helpers.requestWithAuthentication.call(this, credentialType, options);
 }
 
-export async function asanaApiRequestAllItems(this: IExecuteFunctions | ILoadOptionsFunctions, method: IHttpRequestMethods, endpoint: string, body: any = {}, query: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function asanaApiRequestAllItems(
+	this: IExecuteFunctions | ILoadOptionsFunctions,
+	method: IHttpRequestMethods,
+	endpoint: string,
 
+	body: any = {},
+	query: IDataObject = {},
+): Promise<any> {
 	const returnData: IDataObject[] = [];
 
 	let responseData;
@@ -51,10 +53,8 @@ export async function asanaApiRequestAllItems(this: IExecuteFunctions | ILoadOpt
 	do {
 		responseData = await asanaApiRequest.call(this, method, endpoint, body, query, uri);
 		uri = get(responseData, 'next_page.uri');
-		returnData.push.apply(returnData, responseData['data']);
-	} while (
-		responseData['next_page'] !== null
-	);
+		returnData.push.apply(returnData, responseData.data);
+	} while (responseData.next_page !== null);
 
 	return returnData;
 }
@@ -78,14 +78,17 @@ export async function getWorkspaces(this: ILoadOptionsFunctions): Promise<INodeP
 	}
 
 	returnData.sort((a, b) => {
-		if (a.name < b.name) { return -1; }
-		if (a.name > b.name) { return 1; }
+		if (a.name < b.name) {
+			return -1;
+		}
+		if (a.name > b.name) {
+			return 1;
+		}
 		return 0;
 	});
 
 	return returnData;
 }
-
 
 export function getColorOptions(): INodePropertyOptions[] {
 	return [
@@ -108,7 +111,7 @@ export function getColorOptions(): INodePropertyOptions[] {
 		'light-warm-gray',
 		'light-yellow',
 		'none',
-	].map(value => {
+	].map((value) => {
 		return {
 			name: value,
 			value,

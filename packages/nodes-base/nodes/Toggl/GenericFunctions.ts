@@ -1,6 +1,6 @@
-import { OptionsWithUri } from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
+import type {
 	IExecuteFunctions,
 	IExecuteSingleFunctions,
 	IHookFunctions,
@@ -9,14 +9,33 @@ import {
 	ITriggerFunctions,
 } from 'n8n-core';
 
-import {
-	IDataObject, NodeApiError, NodeOperationError,
-} from 'n8n-workflow';
+import type { IDataObject } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-export async function togglApiRequest(this: ITriggerFunctions | IPollFunctions | IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions, method: string, resource: string, body: any = {}, query?: IDataObject, uri?: string): Promise<any> { // tslint:disable-line:no-any
+export async function togglApiRequest(
+	this:
+		| ITriggerFunctions
+		| IPollFunctions
+		| IHookFunctions
+		| IExecuteFunctions
+		| IExecuteSingleFunctions
+		| ILoadOptionsFunctions,
+	method: string,
+	resource: string,
+
+	body: any = {},
+	query?: IDataObject,
+	uri?: string,
+): Promise<any> {
 	const credentials = await this.getCredentials('togglApi');
-	const headerWithAuthentication = Object.assign({},
-		{ Authorization: ` Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}` });
+	const headerWithAuthentication = Object.assign(
+		{},
+		{
+			Authorization: ` Basic ${Buffer.from(
+				`${credentials.username}:${credentials.password}`,
+			).toString('base64')}`,
+		},
+	);
 
 	const options: OptionsWithUri = {
 		headers: headerWithAuthentication,
@@ -30,7 +49,7 @@ export async function togglApiRequest(this: ITriggerFunctions | IPollFunctions |
 		delete options.body;
 	}
 	try {
-		return await this.helpers.request!(options);
+		return await this.helpers.request(options);
 	} catch (error) {
 		throw new NodeApiError(this.getNode(), error);
 	}

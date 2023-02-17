@@ -1,81 +1,114 @@
 import { randomBytes } from 'crypto';
 import { existsSync } from 'fs';
 
-import express from 'express';
-import superagent from 'superagent';
-import request from 'supertest';
-import { URL } from 'url';
 import bodyParser from 'body-parser';
-import util from 'util';
-import { createTestAccount } from 'nodemailer';
-import { set } from 'lodash';
 import { CronJob } from 'cron';
+import express from 'express';
+import set from 'lodash.set';
 import { BinaryDataManager, UserSettings } from 'n8n-core';
 import {
 	ICredentialType,
+	ICredentialTypes,
 	IDataObject,
 	IExecuteFunctions,
+	INode,
 	INodeExecutionData,
 	INodeParameters,
-	INodeTypeData,
-	INodeTypes,
+	INodesAndCredentials,
 	ITriggerFunctions,
 	ITriggerResponse,
 	LoggerProxy,
+	NodeHelpers,
+	toCronExpression,
+	TriggerTime,
 } from 'n8n-workflow';
-
-import config from '../../../config';
-import { AUTHLESS_ENDPOINTS, PUBLIC_API_REST_PATH_SEGMENT, REST_PATH_SEGMENT } from './constants';
-import { AUTH_COOKIE_NAME } from '../../../src/constants';
-import { addRoutes as authMiddleware } from '../../../src/UserManagement/routes';
+import superagent from 'superagent';
+import request from 'supertest';
+import { URL } from 'url';
+import config from '@/config';
+import * as Db from '@/Db';
+import { WorkflowEntity } from '@db/entities/WorkflowEntity';
+import { CredentialTypes } from '@/CredentialTypes';
+import { ExternalHooks } from '@/ExternalHooks';
+import { InternalHooksManager } from '@/InternalHooksManager';
+import { NodeTypes } from '@/NodeTypes';
+import * as ActiveWorkflowRunner from '@/ActiveWorkflowRunner';
+import { nodesController } from '@/api/nodes.api';
+import { workflowsController } from '@/workflows/workflows.controller';
+import { AUTH_COOKIE_NAME, NODE_PACKAGE_PREFIX } from '@/constants';
+import { credentialsController } from '@/credentials/credentials.controller';
+import { InstalledPackages } from '@db/entities/InstalledPackages';
+import type { User } from '@db/entities/User';
+import { getLogger } from '@/Logger';
+import { loadPublicApiVersions } from '@/PublicApi/';
+import { issueJWT } from '@/auth/jwt';
+import * as UserManagementMailer from '@/UserManagement/email/UserManagementMailer';
 import {
-	ActiveWorkflowRunner,
-	CredentialTypes,
-	Db,
-	ExternalHooks,
-	InternalHooksManager,
-	NodeTypes,
-} from '../../../src';
-import { meNamespace as meEndpoints } from '../../../src/UserManagement/routes/me';
-import { usersNamespace as usersEndpoints } from '../../../src/UserManagement/routes/users';
-import { authenticationMethods as authEndpoints } from '../../../src/UserManagement/routes/auth';
-import { ownerNamespace as ownerEndpoints } from '../../../src/UserManagement/routes/owner';
-import { passwordResetNamespace as passwordResetEndpoints } from '../../../src/UserManagement/routes/passwordReset';
-import { issueJWT } from '../../../src/UserManagement/auth/jwt';
-import { getLogger } from '../../../src/Logger';
-import { credentialsController } from '../../../src/api/credentials.api';
-import { loadPublicApiVersions } from '../../../src/PublicApi/';
-import * as UserManagementMailer from '../../../src/UserManagement/email/UserManagementMailer';
-import type { User } from '../../../src/databases/entities/User';
+	AUTHLESS_ENDPOINTS,
+	COMMUNITY_NODE_VERSION,
+	COMMUNITY_PACKAGE_VERSION,
+	PUBLIC_API_REST_PATH_SEGMENT,
+	REST_PATH_SEGMENT,
+} from './constants';
+import { randomName } from './random';
 import type {
 	ApiPath,
 	EndpointGroup,
+	InstalledNodePayload,
+	InstalledPackagePayload,
 	PostgresSchemaSection,
-	SmtpTestAccount,
-	TriggerTime,
 } from './types';
-import type { N8nApp } from '../../../src/UserManagement/Interfaces';
+import { licenseController } from '@/license/license.controller';
+import { eventBusRouter } from '@/eventbus/eventBusRoutes';
+import { registerController } from '@/decorators';
+import {
+	AuthController,
+	MeController,
+	OwnerController,
+	PasswordResetController,
+	UsersController,
+} from '@/controllers';
+import { setupAuthMiddlewares } from '@/middlewares';
+import * as testDb from '../shared/testDb';
 
+import { v4 as uuid } from 'uuid';
+import { handleLdapInit } from '@/Ldap/helpers';
+import { ldapController } from '@/Ldap/routes/ldap.controller.ee';
+
+const loadNodesAndCredentials: INodesAndCredentials = {
+	loaded: { nodes: {}, credentials: {} },
+	known: { nodes: {}, credentials: {} },
+	credentialTypes: {} as ICredentialTypes,
+};
+
+const mockNodeTypes = NodeTypes(loadNodesAndCredentials);
+CredentialTypes(loadNodesAndCredentials);
 
 /**
  * Initialize a test server.
- *
- * @param applyAuth Whether to apply auth middleware to test server.
- * @param endpointGroups Groups of endpoints to apply to test server.
  */
 export async function initTestServer({
-	applyAuth,
+	applyAuth = true,
 	endpointGroups,
+	enablePublicAPI = false,
 }: {
-	applyAuth: boolean;
+	applyAuth?: boolean;
 	endpointGroups?: EndpointGroup[];
+	enablePublicAPI?: boolean;
 }) {
+	await testDb.init();
 	const testServer = {
 		app: express(),
 		restEndpoint: REST_PATH_SEGMENT,
 		publicApiEndpoint: PUBLIC_API_REST_PATH_SEGMENT,
 		externalHooks: {},
 	};
+
+	const logger = getLogger();
+	LoggerProxy.init(logger);
+
+	// Pre-requisite: Mock the telemetry module before calling.
+	await InternalHooksManager.init('test-instance-id', mockNodeTypes);
 
 	testServer.app.use(bodyParser.json());
 	testServer.app.use(bodyParser.urlencoded({ extended: true }));
@@ -84,44 +117,108 @@ export async function initTestServer({
 	config.set('userManagement.isInstanceOwnerSetUp', false);
 
 	if (applyAuth) {
-		authMiddleware.apply(testServer, [AUTHLESS_ENDPOINTS, REST_PATH_SEGMENT]);
+		setupAuthMiddlewares(
+			testServer.app,
+			AUTHLESS_ENDPOINTS,
+			REST_PATH_SEGMENT,
+			Db.collections.User,
+		);
 	}
 
 	if (!endpointGroups) return testServer.app;
 
-	if (endpointGroups.includes('credentials')) {
+	if (
+		endpointGroups.includes('credentials') ||
+		endpointGroups.includes('me') ||
+		endpointGroups.includes('users') ||
+		endpointGroups.includes('passwordReset')
+	) {
 		testServer.externalHooks = ExternalHooks();
 	}
 
 	const [routerEndpoints, functionEndpoints] = classifyEndpointGroups(endpointGroups);
 
 	if (routerEndpoints.length) {
-		const { apiRouters } = await loadPublicApiVersions(testServer.publicApiEndpoint);
-		const map: Record<string, express.Router | express.Router[]> = {
-			credentials: credentialsController,
-			publicApi: apiRouters,
+		const map: Record<string, express.Router | express.Router[] | any> = {
+			credentials: { controller: credentialsController, path: 'credentials' },
+			workflows: { controller: workflowsController, path: 'workflows' },
+			nodes: { controller: nodesController, path: 'nodes' },
+			license: { controller: licenseController, path: 'license' },
+			eventBus: { controller: eventBusRouter, path: 'eventbus' },
+			ldap: { controller: ldapController, path: 'ldap' },
 		};
+
+		if (enablePublicAPI) {
+			const { apiRouters } = await loadPublicApiVersions(testServer.publicApiEndpoint);
+			map.publicApi = apiRouters;
+		}
 
 		for (const group of routerEndpoints) {
 			if (group === 'publicApi') {
 				testServer.app.use(...(map[group] as express.Router[]));
 			} else {
-				testServer.app.use(`/${testServer.restEndpoint}/${group}`, map[group]);
+				testServer.app.use(`/${testServer.restEndpoint}/${map[group].path}`, map[group].controller);
 			}
 		}
 	}
 
 	if (functionEndpoints.length) {
-		const map: Record<string, (this: N8nApp) => void> = {
-			me: meEndpoints,
-			users: usersEndpoints,
-			auth: authEndpoints,
-			owner: ownerEndpoints,
-			passwordReset: passwordResetEndpoints,
-		};
+		const externalHooks = ExternalHooks();
+		const internalHooks = InternalHooksManager.getInstance();
+		const mailer = UserManagementMailer.getInstance();
+		const repositories = Db.collections;
 
 		for (const group of functionEndpoints) {
-			map[group].apply(testServer);
+			switch (group) {
+				case 'auth':
+					registerController(
+						testServer.app,
+						config,
+						new AuthController({ config, logger, internalHooks, repositories }),
+					);
+					break;
+				case 'me':
+					registerController(
+						testServer.app,
+						config,
+						new MeController({ logger, externalHooks, internalHooks, repositories }),
+					);
+					break;
+				case 'passwordReset':
+					registerController(
+						testServer.app,
+						config,
+						new PasswordResetController({
+							config,
+							logger,
+							externalHooks,
+							internalHooks,
+							repositories,
+						}),
+					);
+					break;
+				case 'owner':
+					registerController(
+						testServer.app,
+						config,
+						new OwnerController({ config, logger, internalHooks, repositories }),
+					);
+					break;
+				case 'users':
+					registerController(
+						testServer.app,
+						config,
+						new UsersController({
+							config,
+							mailer,
+							externalHooks,
+							internalHooks,
+							repositories,
+							activeWorkflowRunner: ActiveWorkflowRunner.getInstance(),
+							logger,
+						}),
+					);
+			}
 		}
 	}
 
@@ -129,26 +226,25 @@ export async function initTestServer({
 }
 
 /**
- * Pre-requisite: Mock the telemetry module before calling.
- */
-export function initTestTelemetry() {
-	const mockNodeTypes = { nodeTypes: {} } as INodeTypes;
-
-	void InternalHooksManager.init('test-instance-id', 'test-version', mockNodeTypes);
-}
-
-/**
  * Classify endpoint groups into `routerEndpoints` (newest, using `express.Router`),
  * and `functionEndpoints` (legacy, namespaced inside a function).
  */
-const classifyEndpointGroups = (endpointGroups: string[]) => {
-	const routerEndpoints: string[] = [];
-	const functionEndpoints: string[] = [];
+const classifyEndpointGroups = (endpointGroups: EndpointGroup[]) => {
+	const routerEndpoints: EndpointGroup[] = [];
+	const functionEndpoints: EndpointGroup[] = [];
+
+	const ROUTER_GROUP = [
+		'credentials',
+		'nodes',
+		'workflows',
+		'publicApi',
+		'ldap',
+		'eventBus',
+		'license',
+	];
 
 	endpointGroups.forEach((group) =>
-		(group === 'credentials' || group === 'publicApi' ? routerEndpoints : functionEndpoints).push(
-			group,
-		),
+		(ROUTER_GROUP.includes(group) ? routerEndpoints : functionEndpoints).push(group),
 	);
 
 	return [routerEndpoints, functionEndpoints];
@@ -178,18 +274,21 @@ export function gitHubCredentialType(): ICredentialType {
 				name: 'server',
 				type: 'string',
 				default: 'https://api.github.com',
+				required: true,
 				description: 'The server to connect to. Only has to be set if Github Enterprise is used.',
 			},
 			{
 				displayName: 'User',
 				name: 'user',
 				type: 'string',
+				required: true,
 				default: '',
 			},
 			{
 				displayName: 'Access Token',
 				name: 'accessToken',
 				type: 'string',
+				required: true,
 				default: '',
 			},
 		],
@@ -200,20 +299,26 @@ export function gitHubCredentialType(): ICredentialType {
  * Initialize node types.
  */
 export async function initCredentialsTypes(): Promise<void> {
-	const credentialTypes = CredentialTypes();
-	await credentialTypes.init({
+	loadNodesAndCredentials.loaded.credentials = {
 		githubApi: {
 			type: gitHubCredentialType(),
 			sourcePath: '',
 		},
-	});
+	};
+}
+
+/**
+ * Initialize LDAP manager.
+ */
+export async function initLdapManager(): Promise<void> {
+	await handleLdapInit();
 }
 
 /**
  * Initialize node types.
  */
 export async function initNodeTypes() {
-	const types: INodeTypeData = {
+	loadNodesAndCredentials.loaded.nodes = {
 		'n8n-nodes-base.start': {
 			sourcePath: '',
 			type: {
@@ -269,192 +374,7 @@ export async function initNodeTypes() {
 							default: {},
 							description: 'Triggers for the workflow',
 							placeholder: 'Add Cron Time',
-							options: [
-								{
-									name: 'item',
-									displayName: 'Item',
-									values: [
-										{
-											displayName: 'Mode',
-											name: 'mode',
-											type: 'options',
-											options: [
-												{
-													name: 'Every Minute',
-													value: 'everyMinute',
-												},
-												{
-													name: 'Every Hour',
-													value: 'everyHour',
-												},
-												{
-													name: 'Every Day',
-													value: 'everyDay',
-												},
-												{
-													name: 'Every Week',
-													value: 'everyWeek',
-												},
-												{
-													name: 'Every Month',
-													value: 'everyMonth',
-												},
-												{
-													name: 'Every X',
-													value: 'everyX',
-												},
-												{
-													name: 'Custom',
-													value: 'custom',
-												},
-											],
-											default: 'everyDay',
-											description: 'How often to trigger.',
-										},
-										{
-											displayName: 'Hour',
-											name: 'hour',
-											type: 'number',
-											typeOptions: {
-												minValue: 0,
-												maxValue: 23,
-											},
-											displayOptions: {
-												hide: {
-													mode: ['custom', 'everyHour', 'everyMinute', 'everyX'],
-												},
-											},
-											default: 14,
-											description: 'The hour of the day to trigger (24h format).',
-										},
-										{
-											displayName: 'Minute',
-											name: 'minute',
-											type: 'number',
-											typeOptions: {
-												minValue: 0,
-												maxValue: 59,
-											},
-											displayOptions: {
-												hide: {
-													mode: ['custom', 'everyMinute', 'everyX'],
-												},
-											},
-											default: 0,
-											description: 'The minute of the day to trigger.',
-										},
-										{
-											displayName: 'Day of Month',
-											name: 'dayOfMonth',
-											type: 'number',
-											displayOptions: {
-												show: {
-													mode: ['everyMonth'],
-												},
-											},
-											typeOptions: {
-												minValue: 1,
-												maxValue: 31,
-											},
-											default: 1,
-											description: 'The day of the month to trigger.',
-										},
-										{
-											displayName: 'Weekday',
-											name: 'weekday',
-											type: 'options',
-											displayOptions: {
-												show: {
-													mode: ['everyWeek'],
-												},
-											},
-											options: [
-												{
-													name: 'Monday',
-													value: '1',
-												},
-												{
-													name: 'Tuesday',
-													value: '2',
-												},
-												{
-													name: 'Wednesday',
-													value: '3',
-												},
-												{
-													name: 'Thursday',
-													value: '4',
-												},
-												{
-													name: 'Friday',
-													value: '5',
-												},
-												{
-													name: 'Saturday',
-													value: '6',
-												},
-												{
-													name: 'Sunday',
-													value: '0',
-												},
-											],
-											default: '1',
-											description: 'The weekday to trigger.',
-										},
-										{
-											displayName: 'Cron Expression',
-											name: 'cronExpression',
-											type: 'string',
-											displayOptions: {
-												show: {
-													mode: ['custom'],
-												},
-											},
-											default: '* * * * * *',
-											description:
-												'Use custom cron expression. Values and ranges as follows:<ul><li>Seconds: 0-59</li><li>Minutes: 0 - 59</li><li>Hours: 0 - 23</li><li>Day of Month: 1 - 31</li><li>Months: 0 - 11 (Jan - Dec)</li><li>Day of Week: 0 - 6 (Sun - Sat)</li></ul>.',
-										},
-										{
-											displayName: 'Value',
-											name: 'value',
-											type: 'number',
-											typeOptions: {
-												minValue: 0,
-												maxValue: 1000,
-											},
-											displayOptions: {
-												show: {
-													mode: ['everyX'],
-												},
-											},
-											default: 2,
-											description: 'All how many X minutes/hours it should trigger.',
-										},
-										{
-											displayName: 'Unit',
-											name: 'unit',
-											type: 'options',
-											displayOptions: {
-												show: {
-													mode: ['everyX'],
-												},
-											},
-											options: [
-												{
-													name: 'Minutes',
-													value: 'minutes',
-												},
-												{
-													name: 'Hours',
-													value: 'hours',
-												},
-											],
-											default: 'hours',
-											description: 'If it should trigger all X minutes or hours.',
-										},
-									],
-								},
-							],
+							options: NodeHelpers.cronNodeOptions,
 						},
 					],
 				},
@@ -463,61 +383,8 @@ export async function initNodeTypes() {
 						item: TriggerTime[];
 					};
 
-					// Define the order the cron-time-parameter appear
-					const parameterOrder = [
-						'second', // 0 - 59
-						'minute', // 0 - 59
-						'hour', // 0 - 23
-						'dayOfMonth', // 1 - 31
-						'month', // 0 - 11(Jan - Dec)
-						'weekday', // 0 - 6(Sun - Sat)
-					];
-
 					// Get all the trigger times
-					const cronTimes: string[] = [];
-					let cronTime: string[];
-					let parameterName: string;
-					if (triggerTimes.item !== undefined) {
-						for (const item of triggerTimes.item) {
-							cronTime = [];
-							if (item.mode === 'custom') {
-								cronTimes.push(item.cronExpression as string);
-								continue;
-							}
-							if (item.mode === 'everyMinute') {
-								cronTimes.push(`${Math.floor(Math.random() * 60).toString()} * * * * *`);
-								continue;
-							}
-							if (item.mode === 'everyX') {
-								if (item.unit === 'minutes') {
-									cronTimes.push(
-										`${Math.floor(Math.random() * 60).toString()} */${item.value} * * * *`,
-									);
-								} else if (item.unit === 'hours') {
-									cronTimes.push(
-										`${Math.floor(Math.random() * 60).toString()} 0 */${item.value} * * *`,
-									);
-								}
-								continue;
-							}
-
-							for (parameterName of parameterOrder) {
-								if (item[parameterName] !== undefined) {
-									// Value is set so use it
-									cronTime.push(item[parameterName] as string);
-								} else if (parameterName === 'second') {
-									// For seconds we use by default a random one to make sure to
-									// balance the load a little bit over time
-									cronTime.push(Math.floor(Math.random() * 60).toString());
-								} else {
-									// For all others set "any"
-									cronTime.push('*');
-								}
-							}
-
-							cronTimes.push(cronTime.join(' '));
-						}
-					}
+					const cronTimes = (triggerTimes.item || []).map(toCronExpression);
 
 					// The trigger function to execute when the cron-time got reached
 					// or when manually triggered
@@ -528,10 +395,9 @@ export async function initNodeTypes() {
 					const timezone = this.getTimezone();
 
 					// Start the cron-jobs
-					const cronJobs: CronJob[] = [];
-					for (const cronTime of cronTimes) {
-						cronJobs.push(new CronJob(cronTime, executeTrigger, undefined, true, timezone));
-					}
+					const cronJobs = cronTimes.map(
+						(cronTime) => new CronJob(cronTime, executeTrigger, undefined, true, timezone),
+					);
 
 					// Stop the cron-jobs
 					async function closeFunction() {
@@ -746,15 +612,6 @@ export async function initNodeTypes() {
 			},
 		},
 	};
-
-	await NodeTypes().init(types);
-}
-
-/**
- * Initialize a logger for test runs.
- */
-export function initTestLogger() {
-	LoggerProxy.init(getLogger());
 }
 
 /**
@@ -809,6 +666,10 @@ export function createAgent(
 	return agent;
 }
 
+export function createAuthAgent(app: express.Application) {
+	return (user: User) => createAgent(app, { auth: true, user });
+}
+
 /**
  * Plugin to prefix a path segment into a request URL pathname.
  *
@@ -853,7 +714,7 @@ export function getAuthToken(response: request.Response, authCookieName = AUTH_C
 // ----------------------------------
 
 export async function isInstanceOwnerSetUp() {
-	const { value } = await Db.collections.Settings.findOneOrFail({
+	const { value } = await Db.collections.Settings.findOneByOrFail({
 		key: 'userManagement.isInstanceOwnerSetUp',
 	});
 
@@ -861,61 +722,8 @@ export async function isInstanceOwnerSetUp() {
 }
 
 // ----------------------------------
-//              SMTP
-// ----------------------------------
-
-/**
- * Get an SMTP test account from https://ethereal.email to test sending emails.
- */
-const getSmtpTestAccount = util.promisify<SmtpTestAccount>(createTestAccount);
-
-export async function configureSmtp() {
-	const {
-		user,
-		pass,
-		smtp: { host, port, secure },
-	} = await getSmtpTestAccount();
-
-	config.set('userManagement.emails.mode', 'smtp');
-	config.set('userManagement.emails.smtp.host', host);
-	config.set('userManagement.emails.smtp.port', port);
-	config.set('userManagement.emails.smtp.secure', secure);
-	config.set('userManagement.emails.smtp.auth.user', user);
-	config.set('userManagement.emails.smtp.auth.pass', pass);
-}
-
-export async function isTestSmtpServiceAvailable() {
-	try {
-		await configureSmtp();
-		await UserManagementMailer.getInstance();
-		return true;
-	} catch (_) {
-		return false;
-	}
-}
-
-export function skipSmtpTest(expect: jest.Expect) {
-	console.warn(`SMTP service unavailable - Skipping test ${expect.getState().currentTestName}`);
-	return;
-}
-
-// ----------------------------------
 //              misc
 // ----------------------------------
-
-/**
- * Categorize array items into two groups based on whether they pass a test.
- */
-export const categorize = <T>(arr: T[], test: (str: T) => boolean) => {
-	return arr.reduce<{ pass: T[]; fail: T[] }>(
-		(acc, cur) => {
-			test(cur) ? acc.pass.push(cur) : acc.fail.push(cur);
-
-			return acc;
-		},
-		{ pass: [], fail: [] },
-	);
-};
 
 export function getPostgresSchemaSection(
 	schema = config.getSchema(),
@@ -928,3 +736,70 @@ export function getPostgresSchemaSection(
 
 	return null;
 }
+
+// ----------------------------------
+//           community nodes
+// ----------------------------------
+
+export function installedPackagePayload(): InstalledPackagePayload {
+	return {
+		packageName: NODE_PACKAGE_PREFIX + randomName(),
+		installedVersion: COMMUNITY_PACKAGE_VERSION.CURRENT,
+	};
+}
+
+export function installedNodePayload(packageName: string): InstalledNodePayload {
+	const nodeName = randomName();
+	return {
+		name: nodeName,
+		type: nodeName,
+		latestVersion: COMMUNITY_NODE_VERSION.CURRENT,
+		package: packageName,
+	};
+}
+
+export const emptyPackage = () => {
+	const installedPackage = new InstalledPackages();
+	installedPackage.installedNodes = [];
+
+	return Promise.resolve(installedPackage);
+};
+
+// ----------------------------------
+//           workflow
+// ----------------------------------
+
+export function makeWorkflow(options?: {
+	withPinData: boolean;
+	withCredential?: { id: string; name: string };
+}) {
+	const workflow = new WorkflowEntity();
+
+	const node: INode = {
+		id: uuid(),
+		name: 'Cron',
+		type: 'n8n-nodes-base.cron',
+		parameters: {},
+		typeVersion: 1,
+		position: [740, 240],
+	};
+
+	if (options?.withCredential) {
+		node.credentials = {
+			spotifyApi: options.withCredential,
+		};
+	}
+
+	workflow.name = 'My Workflow';
+	workflow.active = false;
+	workflow.connections = {};
+	workflow.nodes = [node];
+
+	if (options?.withPinData) {
+		workflow.pinData = MOCK_PINDATA;
+	}
+
+	return workflow;
+}
+
+export const MOCK_PINDATA = { Spotify: [{ json: { myKey: 'myValue' } }] };

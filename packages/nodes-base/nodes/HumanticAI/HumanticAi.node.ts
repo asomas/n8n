@@ -1,25 +1,17 @@
-import {
-	IExecuteFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions } from 'n8n-core';
 
-import {
-	IBinaryData,
+import type {
 	IBinaryKeyData,
 	IDataObject,
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
-	NodeOperationError,
 } from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
 
-import {
-	humanticAiApiRequest,
-} from './GenericFunctions';
+import { humanticAiApiRequest } from './GenericFunctions';
 
-import {
-	profileFields,
-	profileOperations,
-} from './ProfileDescription';
+import { profileFields, profileOperations } from './ProfileDescription';
 
 export class HumanticAi implements INodeType {
 	description: INodeTypeDescription = {
@@ -68,8 +60,8 @@ export class HumanticAi implements INodeType {
 		const length = items.length;
 		const qs: IDataObject = {};
 		let responseData;
-		const resource = this.getNodeParameter('resource', 0) as string;
-		const operation = this.getNodeParameter('operation', 0) as string;
+		const resource = this.getNodeParameter('resource', 0);
+		const operation = this.getNodeParameter('operation', 0);
 		for (let i = 0; i < length; i++) {
 			if (resource === 'profile') {
 				if (operation === 'create') {
@@ -78,25 +70,31 @@ export class HumanticAi implements INodeType {
 					qs.userid = userId;
 
 					if (sendResume) {
-						const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
+						const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i);
 
 						if (items[i].binary === undefined) {
-							throw new NodeOperationError(this.getNode(), 'No binary data exists on item!');
+							throw new NodeOperationError(this.getNode(), 'No binary data exists on item!', {
+								itemIndex: i,
+							});
 						}
 
 						const item = items[i].binary as IBinaryKeyData;
 
-						const binaryData = item[binaryPropertyName] as IBinaryData;
+						const binaryData = item[binaryPropertyName];
 						const binaryDataBuffer = await this.helpers.getBinaryDataBuffer(i, binaryPropertyName);
 
 						if (binaryData === undefined) {
-							throw new NodeOperationError(this.getNode(), `No binary data property "${binaryPropertyName}" does not exists on item!`);
+							throw new NodeOperationError(
+								this.getNode(),
+								`No binary data property "${binaryPropertyName}" does not exists on item!`,
+								{ itemIndex: i },
+							);
 						}
 
 						responseData = await humanticAiApiRequest.call(
 							this,
 							'POST',
-							`/user-profile/create`,
+							'/user-profile/create',
 							{},
 							qs,
 							{
@@ -111,7 +109,13 @@ export class HumanticAi implements INodeType {
 							},
 						);
 					} else {
-						responseData = await humanticAiApiRequest.call(this, 'GET', `/user-profile/create`, {}, qs);
+						responseData = await humanticAiApiRequest.call(
+							this,
+							'GET',
+							'/user-profile/create',
+							{},
+							qs,
+						);
 					}
 
 					if (responseData.data !== undefined) {
@@ -122,7 +126,7 @@ export class HumanticAi implements INodeType {
 				}
 				if (operation === 'get') {
 					const userId = this.getNodeParameter('userId', i) as string;
-					const options = this.getNodeParameter('options', i) as IDataObject;
+					const options = this.getNodeParameter('options', i);
 
 					qs.userid = userId;
 
@@ -130,7 +134,7 @@ export class HumanticAi implements INodeType {
 						qs.persona = (options.persona as string[]).join(',');
 					}
 
-					responseData = await humanticAiApiRequest.call(this, 'GET', `/user-profile`, {}, qs);
+					responseData = await humanticAiApiRequest.call(this, 'GET', '/user-profile', {}, qs);
 					responseData = responseData.results;
 				}
 				if (operation === 'update') {
@@ -139,25 +143,31 @@ export class HumanticAi implements INodeType {
 					qs.userid = userId;
 
 					if (sendResume) {
-						const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
+						const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i);
 
 						if (items[i].binary === undefined) {
-							throw new NodeOperationError(this.getNode(), 'No binary data exists on item!');
+							throw new NodeOperationError(this.getNode(), 'No binary data exists on item!', {
+								itemIndex: i,
+							});
 						}
 
 						const item = items[i].binary as IBinaryKeyData;
 
-						const binaryData = item[binaryPropertyName] as IBinaryData;
+						const binaryData = item[binaryPropertyName];
 						const binaryDataBuffer = await this.helpers.getBinaryDataBuffer(i, binaryPropertyName);
 
 						if (binaryData === undefined) {
-							throw new NodeOperationError(this.getNode(), `No binary data property "${binaryPropertyName}" does not exists on item!`);
+							throw new NodeOperationError(
+								this.getNode(),
+								`No binary data property "${binaryPropertyName}" does not exists on item!`,
+								{ itemIndex: i },
+							);
 						}
 
 						responseData = await humanticAiApiRequest.call(
 							this,
 							'POST',
-							`/user-profile/create`,
+							'/user-profile/create',
 							{},
 							qs,
 							{
@@ -180,7 +190,13 @@ export class HumanticAi implements INodeType {
 
 						qs.userid = userId;
 
-						responseData = await humanticAiApiRequest.call(this, 'POST', `/user-profile/create`, body, qs);
+						responseData = await humanticAiApiRequest.call(
+							this,
+							'POST',
+							'/user-profile/create',
+							body,
+							qs,
+						);
 						responseData = responseData.data;
 					}
 				}

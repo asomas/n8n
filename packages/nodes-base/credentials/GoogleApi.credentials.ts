@@ -1,14 +1,14 @@
-import {
-	ICredentialType,
-	INodeProperties,
-} from 'n8n-workflow';
-
+import type { ICredentialType, INodeProperties } from 'n8n-workflow';
 
 export class GoogleApi implements ICredentialType {
 	name = 'googleApi';
+
 	displayName = 'Google API';
-	documentationUrl = 'google';
+
+	documentationUrl = 'google/service-account';
+
 	icon = 'file:Google.svg';
+
 	properties: INodeProperties[] = [
 		{
 			displayName: 'Service Account Email',
@@ -24,8 +24,10 @@ export class GoogleApi implements ICredentialType {
 			name: 'privateKey',
 			type: 'string',
 			default: '',
-			placeholder: '-----BEGIN PRIVATE KEY-----\nXIYEvQIBADANBg<...>0IhA7TMoGYPQc=\n-----END PRIVATE KEY-----\n',
-			description: 'Enter the private key located in the JSON file downloaded from Google Cloud Console',
+			placeholder:
+				'-----BEGIN PRIVATE KEY-----\nXIYEvQIBADANBg<...>0IhA7TMoGYPQc=\n-----END PRIVATE KEY-----\n',
+			description:
+				'Enter the private key located in the JSON file downloaded from Google Cloud Console',
 			required: true,
 		},
 		{
@@ -41,12 +43,11 @@ export class GoogleApi implements ICredentialType {
 			default: '',
 			displayOptions: {
 				show: {
-					inpersonate: [
-						true,
-					],
+					inpersonate: [true],
 				},
 			},
-			description: 'The email address of the user for which the application is requesting delegated access',
+			description:
+				'The email address of the user for which the application is requesting delegated access',
 		},
 	];
 }

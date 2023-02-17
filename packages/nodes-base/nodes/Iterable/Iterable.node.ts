@@ -1,36 +1,22 @@
-import {
-	IExecuteFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions } from 'n8n-core';
 
-import {
+import type {
 	IDataObject,
 	ILoadOptionsFunctions,
 	INodeExecutionData,
 	INodePropertyOptions,
 	INodeType,
 	INodeTypeDescription,
-	NodeApiError,
-	NodeOperationError,
 } from 'n8n-workflow';
+import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
-import {
-	iterableApiRequest,
-} from './GenericFunctions';
+import { iterableApiRequest } from './GenericFunctions';
 
-import {
-	eventFields,
-	eventOperations,
-} from './EventDescription';
+import { eventFields, eventOperations } from './EventDescription';
 
-import {
-	userFields,
-	userOperations,
-} from './UserDescription';
+import { userFields, userOperations } from './UserDescription';
 
-import {
-	userListFields,
-	userListOperations,
-} from './UserListDescription';
+import { userListFields, userListOperations } from './UserListDescription';
 
 import moment from 'moment-timezone';
 
@@ -110,8 +96,8 @@ export class Iterable implements INodeType {
 		const timezone = this.getTimezone();
 		const qs: IDataObject = {};
 		let responseData;
-		const resource = this.getNodeParameter('resource', 0) as string;
-		const operation = this.getNodeParameter('operation', 0) as string;
+		const resource = this.getNodeParameter('resource', 0);
+		const operation = this.getNodeParameter('operation', 0);
 
 		if (resource === 'event') {
 			if (operation === 'track') {
@@ -119,13 +105,16 @@ export class Iterable implements INodeType {
 				const events = [];
 
 				for (let i = 0; i < length; i++) {
-
 					const name = this.getNodeParameter('name', i) as string;
 
-					const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+					const additionalFields = this.getNodeParameter('additionalFields', i);
 
 					if (!additionalFields.email && !additionalFields.id) {
-						throw new NodeOperationError(this.getNode(), 'Either email or userId must be passed in to identify the user. Please add one of both via "Additional Fields". If both are passed in, email takes precedence.');
+						throw new NodeOperationError(
+							this.getNode(),
+							'Either email or userId must be passed in to identify the user. Please add one of both via "Additional Fields". If both are passed in, email takes precedence.',
+							{ itemIndex: i },
+						);
 					}
 
 					const body: IDataObject = {
@@ -161,12 +150,11 @@ export class Iterable implements INodeType {
 			if (operation === 'upsert') {
 				// https://api.iterable.com/api/docs#users_updateUser
 				for (let i = 0; i < length; i++) {
-
 					const identifier = this.getNodeParameter('identifier', i) as string;
 
 					const value = this.getNodeParameter('value', i) as string;
 
-					const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+					const additionalFields = this.getNodeParameter('additionalFields', i);
 
 					const body: IDataObject = {};
 
@@ -191,10 +179,12 @@ export class Iterable implements INodeType {
 
 					responseData = await iterableApiRequest.call(this, 'POST', '/users/update', body);
 
-					if (this.continueOnFail() === false) {
+					if (!this.continueOnFail()) {
 						if (responseData.code !== 'Success') {
-							throw new NodeOperationError(this.getNode(),
+							throw new NodeOperationError(
+								this.getNode(),
 								`Iterable error response [400]: ${responseData.msg}`,
+								{ itemIndex: i },
 							);
 						}
 					}
@@ -221,7 +211,7 @@ export class Iterable implements INodeType {
 
 					responseData = await iterableApiRequest.call(this, 'DELETE', endpoint);
 
-					if (this.continueOnFail() === false) {
+					if (!this.continueOnFail()) {
 						if (responseData.code !== 'Success') {
 							throw new NodeApiError(this.getNode(), responseData);
 						}
@@ -235,14 +225,13 @@ export class Iterable implements INodeType {
 				// https://api.iterable.com/api/docs#users_getUser
 				// https://api.iterable.com/api/docs#users_getUserById
 				for (let i = 0; i < length; i++) {
-
 					const by = this.getNodeParameter('by', i) as string;
 
 					let endpoint;
 
 					if (by === 'email') {
 						const email = this.getNodeParameter('email', i) as string;
-						endpoint = `/users/getByEmail`;
+						endpoint = '/users/getByEmail';
 						qs.email = email;
 					} else {
 						const userId = this.getNodeParameter('userId', i) as string;
@@ -251,11 +240,12 @@ export class Iterable implements INodeType {
 
 					responseData = await iterableApiRequest.call(this, 'GET', endpoint, {}, qs);
 
-					if (this.continueOnFail() === false) {
+					if (!this.continueOnFail()) {
 						if (Object.keys(responseData).length === 0) {
-							throw new NodeApiError(this.getNode(), responseData,
-								{ message: `User not found`, httpCode: '404' },
-							);
+							throw new NodeApiError(this.getNode(), responseData, {
+								message: 'User not found',
+								httpCode: '404',
+							});
 						}
 					}
 
@@ -280,7 +270,6 @@ export class Iterable implements INodeType {
 				const subscribers: IDataObject[] = [];
 
 				for (let i = 0; i < length; i++) {
-
 					const value = this.getNodeParameter('value', i) as string;
 
 					if (identifier === 'email') {
@@ -303,7 +292,7 @@ export class Iterable implements INodeType {
 
 				const identifier = this.getNodeParameter('identifier', 0) as string;
 
-				const additionalFields = this.getNodeParameter('additionalFields', 0) as IDataObject;
+				const additionalFields = this.getNodeParameter('additionalFields', 0);
 
 				const body: IDataObject = {
 					listId: parseInt(listId, 10),
@@ -315,7 +304,6 @@ export class Iterable implements INodeType {
 				const subscribers: IDataObject[] = [];
 
 				for (let i = 0; i < length; i++) {
-
 					const value = this.getNodeParameter('value', i) as string;
 
 					if (identifier === 'email') {

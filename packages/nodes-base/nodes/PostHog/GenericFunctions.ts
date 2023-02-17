@@ -1,18 +1,19 @@
-import {
-	OptionsWithUrl,
-} from 'request';
+import type { OptionsWithUrl } from 'request';
 
-import {
-	IExecuteFunctions,
-	ILoadOptionsFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions, ILoadOptionsFunctions } from 'n8n-core';
 
-import {
-	IDataObject, NodeApiError,
-} from 'n8n-workflow';
+import type { IDataObject } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-export async function posthogApiRequest(this: IExecuteFunctions | ILoadOptionsFunctions, method: string, path: string, body: any = {}, qs: IDataObject = {}, option = {}): Promise<any> { // tslint:disable-line:no-any
+export async function posthogApiRequest(
+	this: IExecuteFunctions | ILoadOptionsFunctions,
+	method: string,
+	path: string,
 
+	body: any = {},
+	qs: IDataObject = {},
+	_option = {},
+): Promise<any> {
 	const credentials = await this.getCredentials('postHogApi');
 
 	const base = credentials.url as string;
@@ -34,7 +35,7 @@ export async function posthogApiRequest(this: IExecuteFunctions | ILoadOptionsFu
 		if (Object.keys(body).length === 0) {
 			delete options.body;
 		}
-		return await this.helpers.request!(options);
+		return await this.helpers.request(options);
 	} catch (error) {
 		throw new NodeApiError(this.getNode(), error);
 	}
@@ -42,14 +43,14 @@ export async function posthogApiRequest(this: IExecuteFunctions | ILoadOptionsFu
 
 export interface IEvent {
 	event: string;
-	properties: { [key: string]: any }; // tslint:disable-line:no-any
+	properties: { [key: string]: any };
 }
 
 export interface IAlias {
 	type: string;
 	event: string;
-	properties: { [key: string]: any }; // tslint:disable-line:no-any
-	context: { [key: string]: any }; // tslint:disable-line:no-any
+	properties: { [key: string]: any };
+	context: { [key: string]: any };
 }
 
 export interface ITrack {
@@ -59,14 +60,13 @@ export interface ITrack {
 	messageId?: string;
 	distinct_id: string;
 	category?: string;
-	properties: { [key: string]: any }; // tslint:disable-line:no-any
-	context: { [key: string]: any }; // tslint:disable-line:no-any
+	properties: { [key: string]: any };
+	context: { [key: string]: any };
 }
-
 
 export interface IIdentity {
 	event: string;
 	messageId?: string;
 	distinct_id: string;
-	properties: { [key: string]: any }; // tslint:disable-line:no-any
+	properties: { [key: string]: any };
 }

@@ -1,15 +1,10 @@
-import {
-	IExecuteFunctions,
-	IHookFunctions,
-	ILoadOptionsFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions, IHookFunctions, ILoadOptionsFunctions } from 'n8n-core';
 
-import {
+import type {
 	GenericValue,
 	IDataObject,
 	IHttpRequestMethods,
 	IHttpRequestOptions,
-	NodeOperationError,
 } from 'n8n-workflow';
 
 /**
@@ -44,7 +39,6 @@ export async function apiRequestAllItems(
 	body: IDataObject = {},
 	query: IDataObject = {},
 ) {
-
 	const returnData: IDataObject[] = [];
 
 	let responseData;
@@ -55,9 +49,7 @@ export async function apiRequestAllItems(
 		responseData = await apiRequest.call(this, method, endpoint, body, query);
 		query.page++;
 		returnData.push.apply(returnData, responseData);
-	} while (
-		responseData.length !== 0
-	);
+	} while (responseData.length !== 0);
 
 	return returnData;
 }

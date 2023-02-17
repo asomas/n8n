@@ -1,20 +1,24 @@
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
+import type {
 	IExecuteFunctions,
 	IExecuteSingleFunctions,
 	IHookFunctions,
 	ILoadOptionsFunctions,
 } from 'n8n-core';
 
-import {
-	IDataObject, NodeApiError,
-} from 'n8n-workflow';
+import type { IDataObject } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-export async function mailerliteApiRequest(this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions | IHookFunctions, method: string, path: string, body: any = {}, qs: IDataObject = {}, option = {}): Promise<any> { // tslint:disable-line:no-any
+export async function mailerliteApiRequest(
+	this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions | IHookFunctions,
+	method: string,
+	path: string,
 
+	body: any = {},
+	qs: IDataObject = {},
+	_option = {},
+): Promise<any> {
 	const credentials = await this.getCredentials('mailerLiteApi');
 
 	const options: OptionsWithUri = {
@@ -38,7 +42,14 @@ export async function mailerliteApiRequest(this: IExecuteFunctions | IExecuteSin
 	}
 }
 
-export async function mailerliteApiRequestAllItems(this: IExecuteFunctions | ILoadOptionsFunctions | IHookFunctions, method: string, endpoint: string, body: any = {}, query: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function mailerliteApiRequestAllItems(
+	this: IExecuteFunctions | ILoadOptionsFunctions | IHookFunctions,
+	method: string,
+	endpoint: string,
+
+	body: any = {},
+	query: IDataObject = {},
+): Promise<any> {
 	const returnData: IDataObject[] = [];
 
 	let responseData;
@@ -50,8 +61,6 @@ export async function mailerliteApiRequestAllItems(this: IExecuteFunctions | ILo
 		responseData = await mailerliteApiRequest.call(this, method, endpoint, body, query);
 		returnData.push.apply(returnData, responseData);
 		query.offset = query.offset + query.limit;
-	} while (
-		responseData.length !== 0
-	);
+	} while (responseData.length !== 0);
 	return returnData;
 }

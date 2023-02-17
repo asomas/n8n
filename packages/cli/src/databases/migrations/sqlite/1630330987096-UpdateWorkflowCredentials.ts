@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
-import * as config from '../../../../config';
-import { logMigrationEnd, logMigrationStart } from '../../utils/migrationHelpers';
-import { runChunked } from '../../utils/migrationHelpers';
+import config from '@/config';
+import { logMigrationEnd, logMigrationStart } from '@db/utils/migrationHelpers';
+import { runInBatches } from '@db/utils/migrationHelpers';
 
 // replacing the credentials in workflows and execution
 // `nodeType: name` changes to `nodeType: { id, name }`
@@ -25,7 +25,7 @@ export class UpdateWorkflowCredentials1630330987096 implements MigrationInterfac
 		`;
 
 		// @ts-ignore
-		await runChunked(queryRunner, workflowsQuery, (workflows) => {
+		await runInBatches(queryRunner, workflowsQuery, (workflows) => {
 			workflows.forEach(async (workflow) => {
 				const nodes = JSON.parse(workflow.nodes);
 				let credentialsUpdated = false;
@@ -39,7 +39,7 @@ export class UpdateWorkflowCredentials1630330987096 implements MigrationInterfac
 									// @ts-ignore
 									(credentials) => credentials.name === name && credentials.type === type,
 								);
-								node.credentials[type] = { id: matchingCredentials?.id.toString() || null, name };
+								node.credentials[type] = { id: matchingCredentials?.id || null, name };
 								credentialsUpdated = true;
 							}
 						}
@@ -68,7 +68,7 @@ export class UpdateWorkflowCredentials1630330987096 implements MigrationInterfac
 			WHERE "waitTill" IS NOT NULL AND finished = 0
 		`;
 		// @ts-ignore
-		await runChunked(queryRunner, waitingExecutionsQuery, (waitingExecutions) => {
+		await runInBatches(queryRunner, waitingExecutionsQuery, (waitingExecutions) => {
 			waitingExecutions.forEach(async (execution) => {
 				const data = JSON.parse(execution.workflowData);
 				let credentialsUpdated = false;
@@ -82,7 +82,7 @@ export class UpdateWorkflowCredentials1630330987096 implements MigrationInterfac
 									// @ts-ignore
 									(credentials) => credentials.name === name && credentials.type === type,
 								);
-								node.credentials[type] = { id: matchingCredentials?.id.toString() || null, name };
+								node.credentials[type] = { id: matchingCredentials?.id || null, name };
 								credentialsUpdated = true;
 							}
 						}
@@ -126,7 +126,7 @@ export class UpdateWorkflowCredentials1630330987096 implements MigrationInterfac
 								// @ts-ignore
 								(credentials) => credentials.name === name && credentials.type === type,
 							);
-							node.credentials[type] = { id: matchingCredentials?.id.toString() || null, name };
+							node.credentials[type] = { id: matchingCredentials?.id || null, name };
 							credentialsUpdated = true;
 						}
 					}
@@ -164,7 +164,7 @@ export class UpdateWorkflowCredentials1630330987096 implements MigrationInterfac
 		`;
 
 		// @ts-ignore
-		await runChunked(queryRunner, workflowsQuery, (workflows) => {
+		await runInBatches(queryRunner, workflowsQuery, (workflows) => {
 			// @ts-ignore
 			workflows.forEach(async (workflow) => {
 				const nodes = JSON.parse(workflow.nodes);
@@ -214,7 +214,7 @@ export class UpdateWorkflowCredentials1630330987096 implements MigrationInterfac
 		`;
 
 		// @ts-ignore
-		await runChunked(queryRunner, waitingExecutionsQuery, (waitingExecutions) => {
+		await runInBatches(queryRunner, waitingExecutionsQuery, (waitingExecutions) => {
 			// @ts-ignore
 			waitingExecutions.forEach(async (execution) => {
 				const data = JSON.parse(execution.workflowData);

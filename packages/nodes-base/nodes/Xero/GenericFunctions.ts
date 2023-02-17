@@ -1,20 +1,20 @@
-import {
-	OptionsWithUri,
- } from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
-	IExecuteFunctions,
-	IExecuteSingleFunctions,
-	ILoadOptionsFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions, IExecuteSingleFunctions, ILoadOptionsFunctions } from 'n8n-core';
 
-import {
-	IDataObject,
-	JsonObject,
-	NodeApiError,
-} from 'n8n-workflow';
+import type { IDataObject, JsonObject } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-export async function xeroApiRequest(this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions, method: string, resource: string, body: any = {}, qs: IDataObject = {}, uri?: string, headers: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function xeroApiRequest(
+	this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	method: string,
+	resource: string,
+
+	body: any = {},
+	qs: IDataObject = {},
+	uri?: string,
+	headers: IDataObject = {},
+): Promise<any> {
 	const options: OptionsWithUri = {
 		headers: {
 			'Content-Type': 'application/json',
@@ -43,8 +43,15 @@ export async function xeroApiRequest(this: IExecuteFunctions | IExecuteSingleFun
 	}
 }
 
-export async function xeroApiRequestAllItems(this: IExecuteFunctions | ILoadOptionsFunctions, propertyName: string ,method: string, endpoint: string, body: any = {}, query: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function xeroApiRequestAllItems(
+	this: IExecuteFunctions | ILoadOptionsFunctions,
+	propertyName: string,
+	method: string,
+	endpoint: string,
 
+	body: any = {},
+	query: IDataObject = {},
+): Promise<any> {
 	const returnData: IDataObject[] = [];
 
 	let responseData;
@@ -54,9 +61,7 @@ export async function xeroApiRequestAllItems(this: IExecuteFunctions | ILoadOpti
 		responseData = await xeroApiRequest.call(this, method, endpoint, body, query);
 		query.page++;
 		returnData.push.apply(returnData, responseData[propertyName]);
-	} while (
-		responseData[propertyName].length !== 0
-	);
+	} while (responseData[propertyName].length !== 0);
 
 	return returnData;
 }

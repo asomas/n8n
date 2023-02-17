@@ -1,15 +1,9 @@
-import {
-	IExecuteFunctions,
-	IHookFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions, IHookFunctions } from 'n8n-core';
 
-import {
-	IDataObject, JsonObject, NodeApiError, NodeOperationError,
-} from 'n8n-workflow';
+import type { IDataObject, JsonObject } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
 /**
  * Make an authenticated or unauthenticated API request to Reddit.
@@ -19,8 +13,7 @@ export async function redditApiRequest(
 	method: string,
 	endpoint: string,
 	qs: IDataObject,
-): Promise<any> { // tslint:disable-line:no-any
-
+): Promise<any> {
 	const resource = this.getNodeParameter('resource', 0) as string;
 
 	const authRequired = ['profile', 'post', 'postComment'].includes(resource);
@@ -32,7 +25,9 @@ export async function redditApiRequest(
 			'user-agent': 'n8n',
 		},
 		method,
-		uri: authRequired ? `https://oauth.reddit.com/${endpoint}` : `https://www.reddit.com/${endpoint}`,
+		uri: authRequired
+			? `https://oauth.reddit.com/${endpoint}`
+			: `https://www.reddit.com/${endpoint}`,
 		qs,
 		json: true,
 	};
@@ -47,9 +42,7 @@ export async function redditApiRequest(
 		} catch (error) {
 			throw new NodeApiError(this.getNode(), error as JsonObject);
 		}
-
 	} else {
-
 		try {
 			return await this.helpers.request.call(this, options);
 		} catch (error) {
@@ -66,13 +59,12 @@ export async function redditApiRequestAllItems(
 	method: string,
 	endpoint: string,
 	qs: IDataObject,
-): Promise<any> { // tslint:disable-line:no-any
-
+): Promise<any> {
 	let responseData;
 	const returnData: IDataObject[] = [];
 
-	const resource = this.getNodeParameter('resource', 0) as string;
-	const operation = this.getNodeParameter('operation', 0) as string;
+	const resource = this.getNodeParameter('resource', 0);
+	const operation = this.getNodeParameter('operation', 0);
 	const returnAll = this.getNodeParameter('returnAll', 0, false) as boolean;
 
 	qs.limit = 100;
@@ -84,17 +76,16 @@ export async function redditApiRequestAllItems(
 		}
 
 		if (endpoint === 'api/search_subreddits.json') {
-			responseData.subreddits.forEach((child: any) => returnData.push(child)); // tslint:disable-line:no-any
+			responseData.subreddits.forEach((child: any) => returnData.push(child));
 		} else if (resource === 'postComment' && operation === 'getAll') {
-			responseData[1].data.children.forEach((child: any) => returnData.push(child.data)); // tslint:disable-line:no-any
+			responseData[1].data.children.forEach((child: any) => returnData.push(child.data));
 		} else {
-			responseData.data.children.forEach((child: any) => returnData.push(child.data)); // tslint:disable-line:no-any
+			responseData.data.children.forEach((child: any) => returnData.push(child.data));
 		}
-		if (qs.limit && returnData.length >= qs.limit && returnAll === false) {
+		if (qs.limit && returnData.length >= qs.limit && !returnAll) {
 			return returnData;
 		}
-
-	} while (responseData.data && responseData.data.after);
+	} while (responseData.data?.after);
 
 	return returnData;
 }
@@ -108,8 +99,7 @@ export async function handleListing(
 	endpoint: string,
 	qs: IDataObject = {},
 	requestMethod: 'GET' | 'POST' = 'GET',
-): Promise<any> { // tslint:disable-line:no-any
-
+): Promise<any> {
 	let responseData;
 
 	const returnAll = this.getNodeParameter('returnAll', i);

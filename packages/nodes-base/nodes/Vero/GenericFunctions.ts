@@ -1,12 +1,18 @@
-import { OptionsWithUri } from 'request';
-import {
-	IExecuteFunctions,
-	IExecuteSingleFunctions,
-	ILoadOptionsFunctions,
-} from 'n8n-core';
-import { IDataObject, NodeApiError, NodeOperationError, } from 'n8n-workflow';
+import type { OptionsWithUri } from 'request';
+import type { IExecuteFunctions, IExecuteSingleFunctions, ILoadOptionsFunctions } from 'n8n-core';
+import type { IDataObject } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-export async function veroApiRequest(this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions, method: string, resource: string, body: any = {}, qs: IDataObject = {}, uri?: string, option: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function veroApiRequest(
+	this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	method: string,
+	resource: string,
+
+	body: any = {},
+	qs: IDataObject = {},
+	uri?: string,
+	option: IDataObject = {},
+): Promise<any> {
 	const credentials = await this.getCredentials('veroApi');
 
 	let options: OptionsWithUri = {
@@ -17,7 +23,7 @@ export async function veroApiRequest(this: IExecuteFunctions | IExecuteSingleFun
 			auth_token: credentials.authToken,
 			...body,
 		},
-		uri: uri ||`https://api.getvero.com/api/v2${resource}`,
+		uri: uri || `https://api.getvero.com/api/v2${resource}`,
 		json: true,
 	};
 	options = Object.assign({}, options, option);
@@ -25,13 +31,13 @@ export async function veroApiRequest(this: IExecuteFunctions | IExecuteSingleFun
 		delete options.body;
 	}
 	try {
-		return await this.helpers.request!(options);
+		return await this.helpers.request(options);
 	} catch (error) {
 		throw new NodeApiError(this.getNode(), error);
 	}
 }
 
-export function validateJSON(json: string | undefined): any { // tslint:disable-line:no-any
+export function validateJSON(json: string | undefined): any {
 	let result;
 	try {
 		result = JSON.parse(json!);

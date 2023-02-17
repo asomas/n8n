@@ -1,22 +1,16 @@
-import {
-	IHookFunctions,
-	IWebhookFunctions,
-} from 'n8n-core';
+import type { IHookFunctions, IWebhookFunctions } from 'n8n-core';
 
-import {
+import type {
 	IDataObject,
 	ILoadOptionsFunctions,
 	INodePropertyOptions,
 	INodeType,
 	INodeTypeDescription,
 	IWebhookResponseData,
-	NodeOperationError,
 } from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
 
-import {
-	asanaApiRequest,
-	getWorkspaces,
-} from './GenericFunctions';
+import { asanaApiRequest, getWorkspaces } from './GenericFunctions';
 
 // import {
 // 	createHmac,
@@ -31,7 +25,7 @@ export class AsanaTrigger implements INodeType {
 		version: 1,
 		description: 'Starts the workflow when Asana events occur.',
 		defaults: {
-			name: 'Asana-Trigger',
+			name: 'Asana Trigger',
 		},
 		inputs: [],
 		outputs: ['main'],
@@ -41,9 +35,7 @@ export class AsanaTrigger implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						authentication: [
-							'accessToken',
-						],
+						authentication: ['accessToken'],
 					},
 				},
 			},
@@ -52,9 +44,7 @@ export class AsanaTrigger implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						authentication: [
-							'oAuth2',
-						],
+						authentication: ['oAuth2'],
 					},
 				},
 			},
@@ -101,7 +91,8 @@ export class AsanaTrigger implements INodeType {
 				},
 				options: [],
 				default: '',
-				description: 'The workspace ID the resource is registered under. This is only required if you want to allow overriding existing webhooks. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/nodes/expressions.html#expressions">expression</a>.',
+				description:
+					'The workspace ID the resource is registered under. This is only required if you want to allow overriding existing webhooks. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code-examples/expressions/">expression</a>.',
 			},
 		],
 	};
@@ -153,21 +144,22 @@ export class AsanaTrigger implements INodeType {
 				const webhookUrl = this.getNodeWebhookUrl('default') as string;
 
 				if (webhookUrl.includes('%20')) {
-					throw new NodeOperationError(this.getNode(), 'The name of the Asana Trigger Node is not allowed to contain any spaces!');
+					throw new NodeOperationError(
+						this.getNode(),
+						'The name of the Asana Trigger Node is not allowed to contain any spaces!',
+					);
 				}
 
 				const resource = this.getNodeParameter('resource') as string;
 
-				const endpoint = `/webhooks`;
+				const endpoint = '/webhooks';
 
 				const body = {
 					resource,
 					target: webhookUrl,
 				};
 
-				let responseData;
-
-				responseData = await asanaApiRequest.call(this, 'POST', endpoint, body);
+				const responseData = await asanaApiRequest.call(this, 'POST', endpoint, body);
 
 				if (responseData.data === undefined || responseData.data.gid === undefined) {
 					// Required data is missing so was not successful
@@ -204,7 +196,7 @@ export class AsanaTrigger implements INodeType {
 	};
 
 	async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
-		const bodyData = this.getBodyData() as IDataObject;
+		const bodyData = this.getBodyData();
 		const headerData = this.getHeaderData() as IDataObject;
 		const req = this.getRequestObject();
 
@@ -225,8 +217,11 @@ export class AsanaTrigger implements INodeType {
 
 		// Is regular webhook call
 		// Check if it contains any events
-		if (bodyData.events === undefined || !Array.isArray(bodyData.events) ||
-			bodyData.events.length === 0) {
+		if (
+			bodyData.events === undefined ||
+			!Array.isArray(bodyData.events) ||
+			bodyData.events.length === 0
+		) {
 			// Does not contain any event data so nothing to process so no reason to
 			// start the workflow
 			return {};
@@ -245,9 +240,7 @@ export class AsanaTrigger implements INodeType {
 		// }
 
 		return {
-			workflowData: [
-				this.helpers.returnJsonArray(req.body.events),
-			],
+			workflowData: [this.helpers.returnJsonArray(req.body.events)],
 		};
 	}
 }

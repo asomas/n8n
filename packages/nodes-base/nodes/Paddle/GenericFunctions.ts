@@ -1,8 +1,6 @@
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
+import type {
 	IExecuteFunctions,
 	IExecuteSingleFunctions,
 	IHookFunctions,
@@ -10,11 +8,23 @@ import {
 	IWebhookFunctions,
 } from 'n8n-core';
 
-import {
-	IDataObject, NodeApiError, NodeOperationError,
-} from 'n8n-workflow';
+import type { IDataObject } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-export async function paddleApiRequest(this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions | IWebhookFunctions, endpoint: string, method: string, body: any = {}, query?: IDataObject, uri?: string): Promise<any> { // tslint:disable-line:no-any
+export async function paddleApiRequest(
+	this:
+		| IHookFunctions
+		| IExecuteFunctions
+		| IExecuteSingleFunctions
+		| ILoadOptionsFunctions
+		| IWebhookFunctions,
+	endpoint: string,
+	method: string,
+
+	body: any = {},
+	_query?: IDataObject,
+	_uri?: string,
+): Promise<any> {
 	const credentials = await this.getCredentials('paddleApi');
 	const productionUrl = 'https://vendors.paddle.com/api';
 	const sandboxUrl = 'https://sandbox-vendors.paddle.com/api';
@@ -31,10 +41,10 @@ export async function paddleApiRequest(this: IHookFunctions | IExecuteFunctions 
 		json: true,
 	};
 
-	body['vendor_id'] = credentials.vendorId;
-	body['vendor_auth_code'] = credentials.vendorAuthCode;
+	body.vendor_id = credentials.vendorId;
+	body.vendor_auth_code = credentials.vendorAuthCode;
 	try {
-		const response = await this.helpers.request!(options);
+		const response = await this.helpers.request(options);
 
 		if (!response.success) {
 			throw new NodeApiError(this.getNode(), response);
@@ -46,8 +56,15 @@ export async function paddleApiRequest(this: IHookFunctions | IExecuteFunctions 
 	}
 }
 
-export async function paddleApiRequestAllItems(this: IHookFunctions | IExecuteFunctions, propertyName: string, endpoint: string, method: string, body: any = {}, query: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function paddleApiRequestAllItems(
+	this: IHookFunctions | IExecuteFunctions,
+	propertyName: string,
+	endpoint: string,
+	method: string,
 
+	body: any = {},
+	query: IDataObject = {},
+): Promise<any> {
 	const returnData: IDataObject[] = [];
 
 	let responseData;
@@ -60,13 +77,14 @@ export async function paddleApiRequestAllItems(this: IHookFunctions | IExecuteFu
 		returnData.push.apply(returnData, responseData[propertyName]);
 		body.page++;
 	} while (
-		responseData[propertyName].length !== 0 && responseData[propertyName].length === body.results_per_page
+		responseData[propertyName].length !== 0 &&
+		responseData[propertyName].length === body.results_per_page
 	);
 
 	return returnData;
 }
 
-export function validateJSON(json: string | undefined): any { // tslint:disable-line:no-any
+export function validateJSON(json: string | undefined): any {
 	let result;
 	try {
 		result = JSON.parse(json!);

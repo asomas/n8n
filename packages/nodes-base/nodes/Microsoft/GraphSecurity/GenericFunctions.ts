@@ -1,16 +1,9 @@
-import {
-	IExecuteFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions } from 'n8n-core';
 
-import {
-	IDataObject,
-	NodeApiError,
-	NodeOperationError,
-} from 'n8n-workflow';
+import type { IDataObject } from 'n8n-workflow';
+import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
 export async function msGraphSecurityApiRequest(
 	this: IExecuteFunctions,
@@ -21,13 +14,11 @@ export async function msGraphSecurityApiRequest(
 	headers: IDataObject = {},
 ) {
 	const {
-		oauthTokenData: {
-			access_token, // tslint:disable-line variable-name
-		},
-	} = await this.getCredentials('microsoftGraphSecurityOAuth2Api') as {
+		oauthTokenData: { access_token },
+	} = (await this.getCredentials('microsoftGraphSecurityOAuth2Api')) as {
 		oauthTokenData: {
 			access_token: string;
-		}
+		};
 	};
 
 	const options: OptionsWithUri = {
@@ -72,7 +63,8 @@ export async function msGraphSecurityApiRequest(
 		}
 
 		if (['Invalid filter clause', 'Invalid ODATA query filter'].includes(nestedMessage)) {
-			error.error.error.message += ' - Please check that your query parameter syntax is correct: https://docs.microsoft.com/en-us/graph/query-parameters#filter-parameter';
+			error.error.error.message +=
+				' - Please check that your query parameter syntax is correct: https://docs.microsoft.com/en-us/graph/query-parameters#filter-parameter';
 		}
 
 		throw new NodeApiError(this.getNode(), error);
@@ -80,7 +72,7 @@ export async function msGraphSecurityApiRequest(
 }
 
 export function tolerateDoubleQuotes(filterQueryParameter: string) {
-	return filterQueryParameter.replace(/"/g, `'`);
+	return filterQueryParameter.replace(/"/g, "'");
 }
 
 export function throwOnEmptyUpdate(this: IExecuteFunctions) {

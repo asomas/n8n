@@ -1,12 +1,8 @@
-import {
-	createHash,
-} from 'crypto';
+import { createHash } from 'crypto';
 
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
+import type {
 	IExecuteFunctions,
 	IExecuteSingleFunctions,
 	IHookFunctions,
@@ -14,18 +10,12 @@ import {
 	IWebhookFunctions,
 } from 'n8n-core';
 
-import {
-	ICredentialDataDecryptedObject,
-	IDataObject,
-	NodeApiError,
-} from 'n8n-workflow';
+import type { ICredentialDataDecryptedObject, IDataObject } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-import {
-	flow,
-	omit,
-} from 'lodash';
+import { flow, omit } from 'lodash';
 
-import {
+import type {
 	AddressFixedCollection,
 	EmailFixedCollection,
 	EmailsFixedCollection,
@@ -36,7 +26,12 @@ import {
  * Make an authenticated API request to Copper.
  */
 export async function copperApiRequest(
-	this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions | IWebhookFunctions,
+	this:
+		| IHookFunctions
+		| IExecuteFunctions
+		| IExecuteSingleFunctions
+		| ILoadOptionsFunctions
+		| IWebhookFunctions,
 	method: string,
 	resource: string,
 	body: IDataObject = {},
@@ -44,7 +39,7 @@ export async function copperApiRequest(
 	uri = '',
 	option: IDataObject = {},
 ) {
-	const credentials = await this.getCredentials('copperApi') as { apiKey: string, email: string };
+	const credentials = (await this.getCredentials('copperApi')) as { apiKey: string; email: string };
 
 	let options: OptionsWithUri = {
 		headers: {
@@ -71,19 +66,15 @@ export async function copperApiRequest(
 	}
 
 	try {
-		return await this.helpers.request!(options);
+		return await this.helpers.request(options);
 	} catch (error) {
 		throw new NodeApiError(this.getNode(), error);
 	}
 }
 
-
 /**
  * Creates a secret from the credentials
  *
- * @export
- * @param {ICredentialDataDecryptedObject} credentials
- * @returns
  */
 export function getAutomaticSecret(credentials: ICredentialDataDecryptedObject) {
 	const data = `${credentials.email},${credentials.apiKey}`;
@@ -156,32 +147,6 @@ export const adjustPersonFields = flow(adjustCompanyFields, adjustEmails);
 export const adjustTaskFields = flow(adjustLeadFields, adjustProjectIds);
 
 /**
- * Handle a Copper listing by returning all items or up to a limit.
- */
-export async function handleListing(
-	this: IExecuteFunctions,
-	method: string,
-	endpoint: string,
-	qs: IDataObject = {},
-	body: IDataObject = {},
-	uri = '',
-) {
-	let responseData;
-
-	const returnAll = this.getNodeParameter('returnAll', 0);
-
-	const option = { resolveWithFullResponse: true };
-
-	if (returnAll) {
-		return await copperApiRequestAllItems.call(this, method, endpoint, body, qs, uri, option);
-	}
-
-	const limit = this.getNodeParameter('limit', 0) as number;
-	responseData = await copperApiRequestAllItems.call(this, method, endpoint, body, qs, uri, option);
-	return responseData.slice(0, limit);
-}
-
-/**
  * Make an authenticated API request to Copper and return all items.
  */
 export async function copperApiRequestAllItems(
@@ -205,4 +170,36 @@ export async function copperApiRequestAllItems(
 	} while (totalItems > returnData.length);
 
 	return returnData;
+}
+
+/**
+ * Handle a Copper listing by returning all items or up to a limit.
+ */
+export async function handleListing(
+	this: IExecuteFunctions,
+	method: string,
+	endpoint: string,
+	qs: IDataObject = {},
+	body: IDataObject = {},
+	uri = '',
+) {
+	const returnAll = this.getNodeParameter('returnAll', 0);
+
+	const option = { resolveWithFullResponse: true };
+
+	if (returnAll) {
+		return copperApiRequestAllItems.call(this, method, endpoint, body, qs, uri, option);
+	}
+
+	const limit = this.getNodeParameter('limit', 0);
+	const responseData = await copperApiRequestAllItems.call(
+		this,
+		method,
+		endpoint,
+		body,
+		qs,
+		uri,
+		option,
+	);
+	return responseData.slice(0, limit);
 }

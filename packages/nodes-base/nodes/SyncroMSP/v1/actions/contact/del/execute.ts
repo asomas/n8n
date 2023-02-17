@@ -1,18 +1,13 @@
-import {
-	IExecuteFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions } from 'n8n-core';
 
-import {
-	IDataObject,
-	INodeExecutionData,
-} from 'n8n-workflow';
+import type { IDataObject, INodeExecutionData } from 'n8n-workflow';
 
-import {
-	apiRequest
-} from '../../../transport';
+import { apiRequest } from '../../../transport';
 
-
-export async function deleteContact(this: IExecuteFunctions, index: number): Promise<INodeExecutionData[]> {
+export async function deleteContact(
+	this: IExecuteFunctions,
+	index: number,
+): Promise<INodeExecutionData[]> {
 	const id = this.getNodeParameter('contactId', index) as string;
 
 	const qs = {} as IDataObject;
@@ -20,7 +15,6 @@ export async function deleteContact(this: IExecuteFunctions, index: number): Pro
 	const endpoint = `contacts/${id}`;
 	const body = {} as IDataObject;
 
-	let responseData;
-	responseData = await apiRequest.call(this, requestMethod, endpoint, body, qs);
+	const responseData = await apiRequest.call(this, requestMethod, endpoint, body, qs);
 	return this.helpers.returnJsonArray(responseData);
 }

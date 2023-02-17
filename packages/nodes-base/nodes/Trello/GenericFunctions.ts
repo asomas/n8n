@@ -1,29 +1,20 @@
-import {
-	IExecuteFunctions,
-	IHookFunctions,
-	ILoadOptionsFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions, IHookFunctions, ILoadOptionsFunctions } from 'n8n-core';
 
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
-	IDataObject,
-	JsonObject,
-	NodeApiError,
-} from 'n8n-workflow';
+import type { IDataObject } from 'n8n-workflow';
 
 /**
  * Make an API request to Trello
  *
- * @param {IHookFunctions} this
- * @param {string} method
- * @param {string} url
- * @param {object} body
- * @returns {Promise<any>}
  */
-export async function apiRequest(this: IHookFunctions | IExecuteFunctions | ILoadOptionsFunctions, method: string, endpoint: string, body: object, query?: IDataObject): Promise<any> { // tslint:disable-line:no-any
+export async function apiRequest(
+	this: IHookFunctions | IExecuteFunctions | ILoadOptionsFunctions,
+	method: string,
+	endpoint: string,
+	body: object,
+	query?: IDataObject,
+): Promise<any> {
 	query = query || {};
 
 	const options: OptionsWithUri = {
@@ -34,15 +25,16 @@ export async function apiRequest(this: IHookFunctions | IExecuteFunctions | ILoa
 		json: true,
 	};
 
-	try {
-		return await this.helpers.requestWithAuthentication.call(this, 'trelloApi', options);
-	} catch(error) {
-		throw new NodeApiError(this.getNode(), error as JsonObject);
-	}
+	return this.helpers.requestWithAuthentication.call(this, 'trelloApi', options);
 }
 
-export async function apiRequestAllItems(this: IHookFunctions | IExecuteFunctions, method: string, endpoint: string, body: IDataObject, query: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
-
+export async function apiRequestAllItems(
+	this: IHookFunctions | IExecuteFunctions,
+	method: string,
+	endpoint: string,
+	body: IDataObject,
+	query: IDataObject = {},
+): Promise<any> {
 	query.limit = 30;
 
 	query.sort = '-id';
@@ -57,9 +49,7 @@ export async function apiRequestAllItems(this: IHookFunctions | IExecuteFunction
 		if (responseData.length !== 0) {
 			query.before = responseData[responseData.length - 1].id;
 		}
-	} while (
-		query.limit <= responseData.length
-	);
+	} while (query.limit <= responseData.length);
 
 	return returnData;
 }

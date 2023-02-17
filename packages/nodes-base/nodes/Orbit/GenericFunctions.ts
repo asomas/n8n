@@ -1,23 +1,27 @@
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
+import type {
 	IExecuteFunctions,
 	IExecuteSingleFunctions,
 	IHookFunctions,
 	ILoadOptionsFunctions,
 } from 'n8n-core';
 
-import {
-	IDataObject, NodeApiError, NodeOperationError,
-} from 'n8n-workflow';
+import type { IDataObject } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-import {
-	IRelation,
-} from './Interfaces';
+import type { IRelation } from './Interfaces';
 
-export async function orbitApiRequest(this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions, method: string, resource: string, body: any = {}, qs: IDataObject = {}, uri?: string, option: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function orbitApiRequest(
+	this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	method: string,
+	resource: string,
+
+	body: any = {},
+	qs: IDataObject = {},
+	uri?: string,
+	option: IDataObject = {},
+): Promise<any> {
 	try {
 		const credentials = await this.getCredentials('orbitApi');
 		let options: OptionsWithUri = {
@@ -33,9 +37,46 @@ export async function orbitApiRequest(this: IHookFunctions | IExecuteFunctions |
 
 		options = Object.assign({}, options, option);
 
-		return await this.helpers.request!(options);
+		return await this.helpers.request(options);
 	} catch (error) {
 		throw new NodeApiError(this.getNode(), error);
+	}
+}
+
+export function resolveIdentities(responseData: IRelation) {
+	const identities: IDataObject = {};
+	for (const data of responseData.included) {
+		identities[data.id as string] = data;
+	}
+
+	if (!Array.isArray(responseData.data)) {
+		responseData.data = [responseData.data];
+	}
+
+	for (let i = 0; i < responseData.data.length; i++) {
+		for (let y = 0; y < responseData.data[i].relationships.identities.data.length; y++) {
+			//@ts-ignore
+			responseData.data[i].relationships.identities.data[y] =
+				identities[responseData.data[i].relationships.identities.data[y].id];
+		}
+	}
+}
+
+export function resolveMember(responseData: IRelation) {
+	const members: IDataObject = {};
+	for (const data of responseData.included) {
+		members[data.id as string] = data;
+	}
+
+	if (!Array.isArray(responseData.data)) {
+		responseData.data = [responseData.data];
+	}
+
+	for (let i = 0; i < responseData.data.length; i++) {
+		//@ts-ignore
+		responseData.data[i].relationships.member.data =
+			//@ts-ignore
+			members[responseData.data[i].relationships.member.data.id];
 	}
 }
 
@@ -43,8 +84,15 @@ export async function orbitApiRequest(this: IHookFunctions | IExecuteFunctions |
  * Make an API request to paginated flow endpoint
  * and return all results
  */
-export async function orbitApiRequestAllItems(this: IHookFunctions | IExecuteFunctions | ILoadOptionsFunctions, propertyName: string, method: string, resource: string, body: any = {}, query: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function orbitApiRequestAllItems(
+	this: IHookFunctions | IExecuteFunctions | ILoadOptionsFunctions,
+	propertyName: string,
+	method: string,
+	resource: string,
 
+	body: any = {},
+	query: IDataObject = {},
+): Promise<any> {
 	const returnData: IDataObject[] = [];
 
 	let responseData;
@@ -63,46 +111,9 @@ export async function orbitApiRequestAllItems(this: IHookFunctions | IExecuteFun
 		}
 
 		query.page++;
-		if (query.limit && (returnData.length >= query.limit)) {
+		if (query.limit && returnData.length >= query.limit) {
 			return returnData;
 		}
-
-	} while (
-		responseData.data.length !== 0
-	);
+	} while (responseData.data.length !== 0);
 	return returnData;
-}
-
-export function resolveIdentities(responseData: IRelation) {
-	const identities: IDataObject = {};
-	for (const data of responseData.included) {
-		identities[data.id as string] = data;
-	}
-
-	if (!Array.isArray(responseData.data)) {
-		responseData.data = [responseData.data];
-	}
-
-	for (let i = 0; i < responseData.data.length; i++) {
-		for (let y = 0; y < responseData.data[i].relationships.identities.data.length; y++) {
-			//@ts-ignore
-			responseData.data[i].relationships.identities.data[y] = identities[responseData.data[i].relationships.identities.data[y].id];
-		}
-	}
-}
-
-export function resolveMember(responseData: IRelation) {
-	const members: IDataObject = {};
-	for (const data of responseData.included) {
-		members[data.id as string] = data;
-	}
-
-	if (!Array.isArray(responseData.data)) {
-		responseData.data = [responseData.data];
-	}
-
-	for (let i = 0; i < responseData.data.length; i++) {
-		//@ts-ignore
-		responseData.data[i].relationships.member.data = members[responseData.data[i].relationships.member.data.id];
-	}
 }

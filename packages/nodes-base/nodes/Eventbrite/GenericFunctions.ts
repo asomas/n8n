@@ -1,8 +1,6 @@
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
+import type {
 	IExecuteFunctions,
 	IExecuteSingleFunctions,
 	IHookFunctions,
@@ -10,17 +8,30 @@ import {
 	IWebhookFunctions,
 } from 'n8n-core';
 
-import {
-	IDataObject, JsonObject, NodeApiError, NodeOperationError,
-} from 'n8n-workflow';
+import type { IDataObject, JsonObject } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-export async function eventbriteApiRequest(this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions | IWebhookFunctions, method: string, resource: string, body: any = {}, qs: IDataObject = {}, uri?: string, option: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function eventbriteApiRequest(
+	this:
+		| IHookFunctions
+		| IExecuteFunctions
+		| IExecuteSingleFunctions
+		| ILoadOptionsFunctions
+		| IWebhookFunctions,
+	method: string,
+	resource: string,
+
+	body: any = {},
+	qs: IDataObject = {},
+	uri?: string,
+	option: IDataObject = {},
+): Promise<any> {
 	let options: OptionsWithUri = {
 		headers: {},
 		method,
 		qs,
 		body,
-		uri: uri ||`https://www.eventbriteapi.com/v3${resource}`,
+		uri: uri || `https://www.eventbriteapi.com/v3${resource}`,
 		json: true,
 	};
 	options = Object.assign({}, options, option);
@@ -34,10 +45,10 @@ export async function eventbriteApiRequest(this: IHookFunctions | IExecuteFuncti
 		if (authenticationMethod === 'privateKey') {
 			const credentials = await this.getCredentials('eventbriteApi');
 
-			options.headers!['Authorization'] = `Bearer ${credentials.apiKey}`;
-			return await this.helpers.request!(options);
+			options.headers!.Authorization = `Bearer ${credentials.apiKey}`;
+			return await this.helpers.request(options);
 		} else {
-			return await this.helpers.requestOAuth2!.call(this, 'eventbriteOAuth2Api', options);
+			return await this.helpers.requestOAuth2.call(this, 'eventbriteOAuth2Api', options);
 		}
 	} catch (error) {
 		throw new NodeApiError(this.getNode(), error as JsonObject);
@@ -48,8 +59,15 @@ export async function eventbriteApiRequest(this: IHookFunctions | IExecuteFuncti
  * Make an API request to paginated flow endpoint
  * and return all results
  */
-export async function eventbriteApiRequestAllItems(this: IHookFunctions | IExecuteFunctions| ILoadOptionsFunctions, propertyName: string, method: string, resource: string, body: any = {}, query: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function eventbriteApiRequestAllItems(
+	this: IHookFunctions | IExecuteFunctions | ILoadOptionsFunctions,
+	propertyName: string,
+	method: string,
+	resource: string,
 
+	body: any = {},
+	query: IDataObject = {},
+): Promise<any> {
 	const returnData: IDataObject[] = [];
 
 	let responseData;
@@ -59,8 +77,7 @@ export async function eventbriteApiRequestAllItems(this: IHookFunctions | IExecu
 		query.continuation = responseData.pagination.continuation;
 		returnData.push.apply(returnData, responseData[propertyName]);
 	} while (
-		responseData.pagination !== undefined &&
-		responseData.pagination.has_more_items !== undefined &&
+		responseData.pagination?.has_more_items !== undefined &&
 		responseData.pagination.has_more_items !== false
 	);
 

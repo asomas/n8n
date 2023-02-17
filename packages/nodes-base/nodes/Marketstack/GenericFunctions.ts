@@ -1,16 +1,9 @@
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
-	IExecuteFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions } from 'n8n-core';
 
-import {
-	IDataObject,
-	NodeApiError,
-	NodeOperationError,
-} from 'n8n-workflow';
+import type { IDataObject } from 'n8n-workflow';
+import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
 export async function marketstackApiRequest(
 	this: IExecuteFunctions,
@@ -50,8 +43,8 @@ export async function marketstackApiRequestAllItems(
 	body: IDataObject = {},
 	qs: IDataObject = {},
 ) {
-	const returnAll = this.getNodeParameter('returnAll', 0, false) as boolean;
-	const limit = this.getNodeParameter('limit', 0, 0) as number;
+	const returnAll = this.getNodeParameter('returnAll', 0, false);
+	const limit = this.getNodeParameter('limit', 0, 0);
 
 	let responseData;
 	const returnData: IDataObject[] = [];
@@ -67,20 +60,15 @@ export async function marketstackApiRequestAllItems(
 		}
 
 		qs.offset += responseData.count;
-	} while (
-		responseData.total > returnData.length
-	);
+	} while (responseData.total > returnData.length);
 
 	return returnData;
 }
 
 export const format = (datetime?: string) => datetime?.split('T')[0];
 
-export function validateTimeOptions(
-	this: IExecuteFunctions,
-	timeOptions: boolean[],
-) {
-	if (timeOptions.every(o => !o)) {
+export function validateTimeOptions(this: IExecuteFunctions, timeOptions: boolean[]) {
+	if (timeOptions.every((o) => !o)) {
 		throw new NodeOperationError(
 			this.getNode(),
 			'Please filter by latest, specific date or timeframe (start and end dates).',

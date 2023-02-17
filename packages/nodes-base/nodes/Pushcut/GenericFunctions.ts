@@ -1,20 +1,20 @@
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
-	IExecuteFunctions,
-	ILoadOptionsFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions, ILoadOptionsFunctions } from 'n8n-core';
 
-import {
-	IDataObject,
-	IHookFunctions,
-	NodeApiError,
-} from 'n8n-workflow';
+import type { IDataObject, IHookFunctions } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-export async function pushcutApiRequest(this: IExecuteFunctions | ILoadOptionsFunctions | IHookFunctions, method: string, path: string, body: any = {}, qs: IDataObject = {}, uri?: string | undefined, option = {}): Promise<any> { // tslint:disable-line:no-any
+export async function pushcutApiRequest(
+	this: IExecuteFunctions | ILoadOptionsFunctions | IHookFunctions,
+	method: string,
+	path: string,
 
+	body: any = {},
+	qs: IDataObject = {},
+	uri?: string | undefined,
+	option = {},
+): Promise<any> {
 	const credentials = await this.getCredentials('pushcutApi');
 
 	const options: OptionsWithUri = {

@@ -1,51 +1,28 @@
-import {
-	IExecuteFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions } from 'n8n-core';
 
-import {
-	cortexApiRequest,
-	getEntityLabel,
-	prepareParameters,
-	splitTags,
-} from './GenericFunctions';
+import { cortexApiRequest, getEntityLabel, prepareParameters, splitTags } from './GenericFunctions';
 
-import {
-	analyzerFields,
-	analyzersOperations,
-} from './AnalyzerDescriptions';
+import { analyzerFields, analyzersOperations } from './AnalyzerDescriptions';
 
-import {
-	IBinaryData,
+import type {
 	IDataObject,
 	ILoadOptionsFunctions,
 	INodeExecutionData,
 	INodePropertyOptions,
 	INodeType,
 	INodeTypeDescription,
-	NodeOperationError,
 } from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
 
-import {
-	responderFields,
-	respondersOperations,
-} from './ResponderDescription';
+import { responderFields, respondersOperations } from './ResponderDescription';
 
-import {
-	jobFields,
-	jobOperations,
-} from './JobDescription';
+import { jobFields, jobOperations } from './JobDescription';
 
-import {
-	upperFirst,
-} from 'lodash';
+import { upperFirst } from 'lodash';
 
-import {
-	IJob,
-} from './AnalyzerInterface';
+import type { IJob } from './AnalyzerInterface';
 
-import {
-	createHash,
-} from 'crypto';
+import { createHash } from 'crypto';
 
 import * as changeCase from 'change-case';
 
@@ -106,13 +83,12 @@ export class Cortex implements INodeType {
 
 	methods = {
 		loadOptions: {
-
 			async loadActiveAnalyzers(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
 				// request the enabled analyzers from instance
 				const requestResult = await cortexApiRequest.call(
 					this,
 					'POST',
-					`/analyzer/_search?range=all`,
+					'/analyzer/_search?range=all',
 				);
 
 				const returnData: INodePropertyOptions[] = [];
@@ -130,11 +106,7 @@ export class Cortex implements INodeType {
 
 			async loadActiveResponders(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
 				// request the enabled responders from instance
-				const requestResult = await cortexApiRequest.call(
-					this,
-					'GET',
-					`/responder`,
-				);
+				const requestResult = await cortexApiRequest.call(this, 'GET', '/responder');
 
 				const returnData: INodePropertyOptions[] = [];
 				for (const responder of requestResult) {
@@ -159,12 +131,10 @@ export class Cortex implements INodeType {
 				// parse supported observable types  into options
 				const returnData: INodePropertyOptions[] = [];
 				for (const dataType of requestResult.dataTypeList) {
-					returnData.push(
-						{
-							name: upperFirst(dataType as string),
-							value: dataType as string,
-						},
-					);
+					returnData.push({
+						name: upperFirst(dataType as string),
+						value: dataType as string,
+					});
 				}
 				return returnData;
 			},
@@ -180,16 +150,13 @@ export class Cortex implements INodeType {
 				// parse the accepted dataType into options
 				const returnData: INodePropertyOptions[] = [];
 				for (const dataType of requestResult.dataTypeList) {
-					returnData.push(
-						{
-							value: (dataType as string).split(':')[1],
-							name: changeCase.capitalCase((dataType as string).split(':')[1]),
-						},
-					);
+					returnData.push({
+						value: (dataType as string).split(':')[1],
+						name: changeCase.capitalCase((dataType as string).split(':')[1]),
+					});
 				}
 				return returnData;
 			},
-
 		},
 	};
 
@@ -197,25 +164,22 @@ export class Cortex implements INodeType {
 		const items = this.getInputData();
 		const returnData: IDataObject[] = [];
 		const length = items.length;
-		const qs: IDataObject = {};
 		let responseData;
-		const resource = this.getNodeParameter('resource', 0) as string;
-		const operation = this.getNodeParameter('operation', 0) as string;
+		const resource = this.getNodeParameter('resource', 0);
+		const operation = this.getNodeParameter('operation', 0);
 
 		for (let i = 0; i < length; i++) {
 			try {
-
 				if (resource === 'analyzer') {
 					//https://github.com/TheHive-Project/CortexDocs/blob/master/api/api-guide.md#run
 					if (operation === 'execute') {
-
 						let force = false;
 
 						const analyzer = this.getNodeParameter('analyzer', i) as string;
 
 						const observableType = this.getNodeParameter('observableType', i) as string;
 
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+						const additionalFields = this.getNodeParameter('additionalFields', i);
 
 						const tlp = this.getNodeParameter('tlp', i) as string;
 
@@ -229,17 +193,22 @@ export class Cortex implements INodeType {
 						}
 
 						if (observableType === 'file') {
-
 							const item = items[i];
 
 							if (item.binary === undefined) {
-								throw new NodeOperationError(this.getNode(), 'No binary data exists on item!');
+								throw new NodeOperationError(this.getNode(), 'No binary data exists on item!', {
+									itemIndex: i,
+								});
 							}
 
-							const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
+							const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i);
 
 							if (item.binary[binaryPropertyName] === undefined) {
-								throw new NodeOperationError(this.getNode(), `No binary data property "${binaryPropertyName}" does not exists on item!`);
+								throw new NodeOperationError(
+									this.getNode(),
+									`No binary data property "${binaryPropertyName}" does not exists on item!`,
+									{ itemIndex: i },
+								);
 							}
 
 							const fileBufferData = await this.helpers.getBinaryDataBuffer(i, binaryPropertyName);
@@ -260,7 +229,7 @@ export class Cortex implements INodeType {
 								},
 							};
 
-							responseData = await cortexApiRequest.call(
+							responseData = (await cortexApiRequest.call(
 								this,
 								'POST',
 								`/analyzer/${analyzer.split('::')[0]}/run`,
@@ -268,22 +237,21 @@ export class Cortex implements INodeType {
 								{ force },
 								'',
 								options,
-							) as IJob;
+							)) as IJob;
 
 							continue;
-
 						} else {
 							const observableValue = this.getNodeParameter('observableValue', i) as string;
 
 							body.data = observableValue;
 
-							responseData = await cortexApiRequest.call(
+							responseData = (await cortexApiRequest.call(
 								this,
 								'POST',
 								`/analyzer/${analyzer.split('::')[0]}/run`,
 								body,
 								{ force },
-							) as IJob;
+							)) as IJob;
 						}
 
 						if (additionalFields.timeout) {
@@ -301,25 +269,15 @@ export class Cortex implements INodeType {
 				if (resource === 'job') {
 					//https://github.com/TheHive-Project/CortexDocs/blob/master/api/api-guide.md#get-details-1
 					if (operation === 'get') {
-
 						const jobId = this.getNodeParameter('jobId', i) as string;
 
-						responseData = await cortexApiRequest.call(
-							this,
-							'GET',
-							`/job/${jobId}`,
-						);
+						responseData = await cortexApiRequest.call(this, 'GET', `/job/${jobId}`);
 					}
 					//https://github.com/TheHive-Project/CortexDocs/blob/master/api/api-guide.md#get-details-and-report
 					if (operation === 'report') {
-
 						const jobId = this.getNodeParameter('jobId', i) as string;
 
-						responseData = await cortexApiRequest.call(
-							this,
-							'GET',
-							`/job/${jobId}/report`,
-						);
+						responseData = await cortexApiRequest.call(this, 'GET', `/job/${jobId}/report`);
 					}
 				}
 
@@ -331,7 +289,6 @@ export class Cortex implements INodeType {
 
 						const isJSON = this.getNodeParameter('jsonObject', i) as boolean;
 						let body: IDataObject;
-
 
 						if (isJSON) {
 							const entityJson = JSON.parse(this.getNodeParameter('objectData', i) as string);
@@ -346,10 +303,9 @@ export class Cortex implements INodeType {
 								message: entityJson.message || '',
 								parameters: [],
 							};
-
 						} else {
-
-							const values = (this.getNodeParameter('parameters', i) as IDataObject).values as IDataObject;
+							const values = (this.getNodeParameter('parameters', i) as IDataObject)
+								.values as IDataObject;
 
 							body = {
 								responderId,
@@ -364,40 +320,44 @@ export class Cortex implements INodeType {
 								const artifacts = (body.data as IDataObject).artifacts as IDataObject;
 
 								if (artifacts) {
-
-									const artifactValues = (artifacts as IDataObject).artifactValues as IDataObject[];
+									const artifactValues = artifacts.artifactValues as IDataObject[];
 
 									if (artifactValues) {
-
 										const artifactData = [];
 
 										for (const artifactvalue of artifactValues) {
-
 											const element: IDataObject = {};
 
 											element.message = artifactvalue.message as string;
 
-											element.tags = splitTags(artifactvalue.tags as string) as string[];
+											element.tags = splitTags(artifactvalue.tags as string);
 
 											element.dataType = artifactvalue.dataType as string;
 
 											element.data = artifactvalue.data as string;
 
 											if (artifactvalue.dataType === 'file') {
-
 												const item = items[i];
 
 												if (item.binary === undefined) {
-													throw new NodeOperationError(this.getNode(), 'No binary data exists on item!');
+													throw new NodeOperationError(
+														this.getNode(),
+														'No binary data exists on item!',
+														{ itemIndex: i },
+													);
 												}
 
 												const binaryPropertyName = artifactvalue.binaryProperty as string;
 
 												if (item.binary[binaryPropertyName] === undefined) {
-													throw new NodeOperationError(this.getNode(), `No binary data property '${binaryPropertyName}' does not exists on item!`);
+													throw new NodeOperationError(
+														this.getNode(),
+														`No binary data property '${binaryPropertyName}' does not exists on item!`,
+														{ itemIndex: i },
+													);
 												}
 
-												const binaryData = item.binary[binaryPropertyName] as IBinaryData;
+												const binaryData = item.binary[binaryPropertyName];
 
 												element.data = `${binaryData.fileName};${binaryData.mimeType};${binaryData.data}`;
 											}
@@ -413,19 +373,28 @@ export class Cortex implements INodeType {
 								// deal with file observable
 
 								if ((body.data as IDataObject).dataType === 'file') {
-
 									const item = items[i];
 
 									if (item.binary === undefined) {
-										throw new NodeOperationError(this.getNode(), 'No binary data exists on item!');
+										throw new NodeOperationError(this.getNode(), 'No binary data exists on item!', {
+											itemIndex: i,
+										});
 									}
 
-									const binaryPropertyName = (body.data as IDataObject).binaryPropertyName as string;
+									const binaryPropertyName = (body.data as IDataObject)
+										.binaryPropertyName as string;
 									if (item.binary[binaryPropertyName] === undefined) {
-										throw new NodeOperationError(this.getNode(), `No binary data property "${binaryPropertyName}" does not exists on item!`);
+										throw new NodeOperationError(
+											this.getNode(),
+											`No binary data property "${binaryPropertyName}" does not exists on item!`,
+											{ itemIndex: i },
+										);
 									}
 
-									const fileBufferData = await this.helpers.getBinaryDataBuffer(i, binaryPropertyName);
+									const fileBufferData = await this.helpers.getBinaryDataBuffer(
+										i,
+										binaryPropertyName,
+									);
 									const sha256 = createHash('sha256').update(fileBufferData).digest('hex');
 
 									(body.data as IDataObject).attachment = {
@@ -448,14 +417,13 @@ export class Cortex implements INodeType {
 								label: getEntityLabel(body.data as IDataObject),
 								...body,
 							};
-
 						}
-						responseData = await cortexApiRequest.call(
+						responseData = (await cortexApiRequest.call(
 							this,
 							'POST',
 							`/responder/${responderId}/run`,
 							body,
-						) as IJob;
+						)) as IJob;
 					}
 				}
 
@@ -464,7 +432,6 @@ export class Cortex implements INodeType {
 				} else if (responseData !== undefined) {
 					returnData.push(responseData as IDataObject);
 				}
-
 			} catch (error) {
 				if (this.continueOnFail()) {
 					returnData.push({ error: error.message });

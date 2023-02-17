@@ -1,26 +1,17 @@
-import {
-	IExecuteFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions } from 'n8n-core';
 
-import {
+import type {
 	IDataObject,
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
 
-import {
-	ouraApiRequest,
-} from './GenericFunctions';
+import { ouraApiRequest } from './GenericFunctions';
 
-import {
-	profileOperations,
-} from './ProfileDescription';
+import { profileOperations } from './ProfileDescription';
 
-import {
-	summaryFields,
-	summaryOperations,
-} from './SummaryDescription';
+import { summaryFields, summaryOperations } from './SummaryDescription';
 
 import moment from 'moment';
 
@@ -75,13 +66,11 @@ export class Oura implements INodeType {
 		let responseData;
 		const returnData: IDataObject[] = [];
 
-		const resource = this.getNodeParameter('resource', 0) as string;
-		const operation = this.getNodeParameter('operation', 0) as string;
+		const resource = this.getNodeParameter('resource', 0);
+		const operation = this.getNodeParameter('operation', 0);
 
 		for (let i = 0; i < length; i++) {
-
 			if (resource === 'profile') {
-
 				// *********************************************************************
 				//                             profile
 				// *********************************************************************
@@ -89,17 +78,13 @@ export class Oura implements INodeType {
 				// https://cloud.ouraring.com/docs/personal-info
 
 				if (operation === 'get') {
-
 					// ----------------------------------
 					//         profile: get
 					// ----------------------------------
 
 					responseData = await ouraApiRequest.call(this, 'GET', '/userinfo');
-
 				}
-
 			} else if (resource === 'summary') {
-
 				// *********************************************************************
 				//                             summary
 				// *********************************************************************
@@ -108,9 +93,12 @@ export class Oura implements INodeType {
 
 				const qs: IDataObject = {};
 
-				const { start, end } = this.getNodeParameter('filters', i) as { start: string; end: string; };
+				const { start, end } = this.getNodeParameter('filters', i) as {
+					start: string;
+					end: string;
+				};
 
-				const returnAll = this.getNodeParameter('returnAll', 0) as boolean;
+				const returnAll = this.getNodeParameter('returnAll', 0);
 
 				if (start) {
 					qs.start = moment(start).format('YYYY-MM-DD');
@@ -121,7 +109,6 @@ export class Oura implements INodeType {
 				}
 
 				if (operation === 'getActivity') {
-
 					// ----------------------------------
 					//       profile: getActivity
 					// ----------------------------------
@@ -129,13 +116,11 @@ export class Oura implements INodeType {
 					responseData = await ouraApiRequest.call(this, 'GET', '/activity', {}, qs);
 					responseData = responseData.activity;
 
-					if (returnAll === false) {
-						const limit = this.getNodeParameter('limit', 0) as number;
+					if (!returnAll) {
+						const limit = this.getNodeParameter('limit', 0);
 						responseData = responseData.splice(0, limit);
 					}
-
 				} else if (operation === 'getReadiness') {
-
 					// ----------------------------------
 					//       profile: getReadiness
 					// ----------------------------------
@@ -143,13 +128,11 @@ export class Oura implements INodeType {
 					responseData = await ouraApiRequest.call(this, 'GET', '/readiness', {}, qs);
 					responseData = responseData.readiness;
 
-					if (returnAll === false) {
-						const limit = this.getNodeParameter('limit', 0) as number;
+					if (!returnAll) {
+						const limit = this.getNodeParameter('limit', 0);
 						responseData = responseData.splice(0, limit);
 					}
-
 				} else if (operation === 'getSleep') {
-
 					// ----------------------------------
 					//         profile: getSleep
 					// ----------------------------------
@@ -157,19 +140,16 @@ export class Oura implements INodeType {
 					responseData = await ouraApiRequest.call(this, 'GET', '/sleep', {}, qs);
 					responseData = responseData.sleep;
 
-					if (returnAll === false) {
-						const limit = this.getNodeParameter('limit', 0) as number;
+					if (!returnAll) {
+						const limit = this.getNodeParameter('limit', 0);
 						responseData = responseData.splice(0, limit);
 					}
-
 				}
-
 			}
 
 			Array.isArray(responseData)
 				? returnData.push(...responseData)
 				: returnData.push(responseData);
-
 		}
 
 		return [this.helpers.returnJsonArray(returnData)];

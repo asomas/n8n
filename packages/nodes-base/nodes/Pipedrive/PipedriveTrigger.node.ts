@@ -1,24 +1,17 @@
-import {
-	IHookFunctions,
-	IWebhookFunctions,
-} from 'n8n-core';
+import type { IHookFunctions, IWebhookFunctions } from 'n8n-core';
 
-import {
+import type {
 	ICredentialDataDecryptedObject,
 	INodeType,
 	INodeTypeDescription,
 	IWebhookResponseData,
 } from 'n8n-workflow';
 
-import {
-	pipedriveApiRequest,
-} from './GenericFunctions';
+import { pipedriveApiRequest } from './GenericFunctions';
 
 import basicAuth from 'basic-auth';
 
-import {
-	Response,
-} from 'express';
+import type { Response } from 'express';
 
 function authorizationError(resp: Response, realm: string, responseCode: number, message?: string) {
 	if (message === undefined) {
@@ -56,9 +49,7 @@ export class PipedriveTrigger implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						authentication: [
-							'apiToken',
-						],
+						authentication: ['apiToken'],
 					},
 				},
 			},
@@ -67,9 +58,7 @@ export class PipedriveTrigger implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						authentication: [
-							'oAuth2',
-						],
+						authentication: ['oAuth2'],
 					},
 				},
 			},
@@ -78,9 +67,7 @@ export class PipedriveTrigger implements INodeType {
 				required: true,
 				displayOptions: {
 					show: {
-						incomingAuthentication: [
-							'basicAuth',
-						],
+						incomingAuthentication: ['basicAuth'],
 					},
 				},
 			},
@@ -136,26 +123,31 @@ export class PipedriveTrigger implements INodeType {
 						name: 'Added',
 						value: 'added',
 						description: 'Data got added',
+						action: 'Data was added',
 					},
 					{
 						name: 'All',
 						value: '*',
 						description: 'Any change',
+						action: 'Any change',
 					},
 					{
 						name: 'Deleted',
 						value: 'deleted',
 						description: 'Data got deleted',
+						action: 'Data was deleted',
 					},
 					{
 						name: 'Merged',
 						value: 'merged',
 						description: 'Data got merged',
+						action: 'Data was merged',
 					},
 					{
 						name: 'Updated',
 						value: 'updated',
 						description: 'Data got updated',
+						action: 'Data was updated',
 					},
 				],
 				default: '*',
@@ -230,7 +222,7 @@ export class PipedriveTrigger implements INodeType {
 				const eventObject = this.getNodeParameter('object') as string;
 
 				// Webhook got created before so check if it still exists
-				const endpoint = `/webhooks`;
+				const endpoint = '/webhooks';
 
 				const responseData = await pipedriveApiRequest.call(this, 'GET', endpoint, {});
 
@@ -239,9 +231,11 @@ export class PipedriveTrigger implements INodeType {
 				}
 
 				for (const existingData of responseData.data) {
-					if (existingData.subscription_url === webhookUrl
-						&& existingData.event_action === eventAction
-						&& existingData.event_object === eventObject) {
+					if (
+						existingData.subscription_url === webhookUrl &&
+						existingData.event_action === eventAction &&
+						existingData.event_object === eventObject
+					) {
 						// The webhook exists already
 						webhookData.webhookId = existingData.id;
 						return true;
@@ -256,7 +250,7 @@ export class PipedriveTrigger implements INodeType {
 				const eventAction = this.getNodeParameter('action') as string;
 				const eventObject = this.getNodeParameter('object') as string;
 
-				const endpoint = `/webhooks`;
+				const endpoint = '/webhooks';
 
 				const body = {
 					event_action: eventAction,
@@ -349,16 +343,17 @@ export class PipedriveTrigger implements INodeType {
 				return authorizationError(resp, realm, 401);
 			}
 
-			if (basicAuthData.name !== httpBasicAuth!.user || basicAuthData.pass !== httpBasicAuth!.password) {
+			if (
+				basicAuthData.name !== httpBasicAuth.user ||
+				basicAuthData.pass !== httpBasicAuth.password
+			) {
 				// Provided authentication data is wrong
 				return authorizationError(resp, realm, 403);
 			}
 		}
 
 		return {
-			workflowData: [
-				this.helpers.returnJsonArray(req.body),
-			],
+			workflowData: [this.helpers.returnJsonArray(req.body)],
 		};
 	}
 }

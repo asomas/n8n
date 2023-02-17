@@ -1,16 +1,14 @@
-import {
-	IExecuteFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions } from 'n8n-core';
 
-import {
+import type {
 	IDataObject,
 	IN8nHttpFullResponse,
 	IN8nHttpResponse,
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
-	NodeOperationError,
 } from 'n8n-workflow';
+import { jsonParse, NodeOperationError } from 'n8n-workflow';
 
 export class RespondToWebhook implements INodeType {
 	description: INodeTypeDescription = {
@@ -25,8 +23,7 @@ export class RespondToWebhook implements INodeType {
 		},
 		inputs: ['main'],
 		outputs: ['main'],
-		credentials: [
-		],
+		credentials: [],
 		properties: [
 			{
 				displayName: 'Respond With',
@@ -58,15 +55,13 @@ export class RespondToWebhook implements INodeType {
 				description: 'The data that should be returned',
 			},
 			{
-				displayName: 'When using expressions, note that this node will only run for the first item in the input data.',
+				displayName:
+					'When using expressions, note that this node will only run for the first item in the input data.',
 				name: 'webhookNotice',
 				type: 'notice',
 				displayOptions: {
 					show: {
-						respondWith: [
-							'json',
-							'text',
-						],
+						respondWith: ['json', 'text'],
 					},
 				},
 				default: '',
@@ -77,9 +72,7 @@ export class RespondToWebhook implements INodeType {
 				type: 'json',
 				displayOptions: {
 					show: {
-						respondWith: [
-							'json',
-						],
+						respondWith: ['json'],
 					},
 				},
 				default: '',
@@ -92,9 +85,7 @@ export class RespondToWebhook implements INodeType {
 				type: 'string',
 				displayOptions: {
 					show: {
-						respondWith: [
-							'text',
-						],
+						respondWith: ['text'],
 					},
 				},
 				default: '',
@@ -107,9 +98,7 @@ export class RespondToWebhook implements INodeType {
 				type: 'options',
 				displayOptions: {
 					show: {
-						respondWith: [
-							'binary',
-						],
+						respondWith: ['binary'],
 					},
 				},
 				options: [
@@ -134,12 +123,8 @@ export class RespondToWebhook implements INodeType {
 				default: 'data',
 				displayOptions: {
 					show: {
-						respondWith: [
-							'binary',
-						],
-						responseDataSource: [
-							'set',
-						],
+						respondWith: ['binary'],
+						responseDataSource: ['set'],
 					},
 				},
 				description: 'The name of the node input field with the binary data',
@@ -205,7 +190,7 @@ export class RespondToWebhook implements INodeType {
 		const items = this.getInputData();
 
 		const respondWith = this.getNodeParameter('respondWith', 0) as string;
-		const options = this.getNodeParameter('options', 0, {}) as IDataObject;
+		const options = this.getNodeParameter('options', 0, {});
 
 		const headers = {} as IDataObject;
 		if (options.responseHeaders) {
@@ -221,7 +206,9 @@ export class RespondToWebhook implements INodeType {
 		if (respondWith === 'json') {
 			const responseBodyParameter = this.getNodeParameter('responseBody', 0) as string;
 			if (responseBodyParameter) {
-				responseBody = JSON.parse(responseBodyParameter);
+				responseBody = jsonParse(responseBodyParameter, {
+					errorMessage: "Invalid JSON in 'Response Body' field",
+				});
 			}
 		} else if (respondWith === 'firstIncomingItem') {
 			responseBody = items[0].json;
@@ -249,29 +236,37 @@ export class RespondToWebhook implements INodeType {
 			}
 
 			const binaryData = item.binary[responseBinaryPropertyName];
-			const binaryDataBuffer = await this.helpers.getBinaryDataBuffer(0, responseBinaryPropertyName);
+			const binaryDataBuffer = await this.helpers.getBinaryDataBuffer(
+				0,
+				responseBinaryPropertyName,
+			);
 
 			if (binaryData === undefined) {
-				throw new NodeOperationError(this.getNode(), `No binary data property "${responseBinaryPropertyName}" does not exists on item!`);
+				throw new NodeOperationError(
+					this.getNode(),
+					`No binary data property "${responseBinaryPropertyName}" does not exists on item!`,
+				);
 			}
 
-			if (headers['content-type']) {
+			if (!headers['content-type']) {
 				headers['content-type'] = binaryData.mimeType;
 			}
 			responseBody = binaryDataBuffer;
 		} else if (respondWith !== 'noData') {
-			throw new NodeOperationError(this.getNode(), `The Response Data option "${respondWith}" is not supported!`);
+			throw new NodeOperationError(
+				this.getNode(),
+				`The Response Data option "${respondWith}" is not supported!`,
+			);
 		}
 
 		const response: IN8nHttpFullResponse = {
 			body: responseBody,
 			headers,
-			statusCode: options.responseCode as number || 200,
+			statusCode: (options.responseCode as number) || 200,
 		};
 
 		this.sendResponse(response);
 
 		return this.prepareOutputData(items);
 	}
-
 }

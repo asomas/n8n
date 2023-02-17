@@ -1,4 +1,4 @@
-/* eslint-disable import/no-cycle */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable no-param-reassign */
 /* eslint-disable @typescript-eslint/prefer-optional-chain */
@@ -13,14 +13,12 @@
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 /* eslint-disable prefer-destructuring */
-import express from 'express';
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { get } from 'lodash';
+import type express from 'express';
+import get from 'lodash.get';
 
-import { BINARY_ENCODING, BinaryDataManager, NodeExecuteFunctions } from 'n8n-core';
+import { BINARY_ENCODING, BinaryDataManager, NodeExecuteFunctions, eventEmitter } from 'n8n-core';
 
-import {
-	createDeferredPromise,
+import type {
 	IBinaryKeyData,
 	IDataObject,
 	IDeferredPromise,
@@ -33,48 +31,43 @@ import {
 	IWebhookResponseData,
 	IWorkflowDataProxyAdditionalKeys,
 	IWorkflowExecuteAdditionalData,
-	LoggerProxy as Logger,
-	NodeHelpers,
 	Workflow,
 	WorkflowExecuteMode,
 } from 'n8n-workflow';
-
-// eslint-disable-next-line import/no-cycle
 import {
-	GenericHelpers,
+	createDeferredPromise,
+	ErrorReporterProxy as ErrorReporter,
+	LoggerProxy as Logger,
+	NodeHelpers,
+} from 'n8n-workflow';
+
+import type {
 	IExecutionDb,
 	IResponseCallbackData,
 	IWorkflowDb,
 	IWorkflowExecutionDataProcess,
-	ResponseHelper,
-	WorkflowExecuteAdditionalData,
-	WorkflowHelpers,
-	WorkflowRunner,
-} from '.';
-
-// eslint-disable-next-line import/no-cycle
-import * as ActiveExecutions from './ActiveExecutions';
-import { User } from './databases/entities/User';
-import { WorkflowEntity } from './databases/entities/WorkflowEntity';
-import { getWorkflowOwner } from './UserManagement/UserManagementHelper';
-
-const activeExecutions = ActiveExecutions.getInstance();
+} from '@/Interfaces';
+import * as GenericHelpers from '@/GenericHelpers';
+import * as ResponseHelper from '@/ResponseHelper';
+import * as WorkflowHelpers from '@/WorkflowHelpers';
+import { WorkflowRunner } from '@/WorkflowRunner';
+import * as WorkflowExecuteAdditionalData from '@/WorkflowExecuteAdditionalData';
+import * as ActiveExecutions from '@/ActiveExecutions';
+import type { User } from '@db/entities/User';
+import type { WorkflowEntity } from '@db/entities/WorkflowEntity';
+import { getWorkflowOwner } from '@/UserManagement/UserManagementHelper';
 
 export const WEBHOOK_METHODS = ['DELETE', 'GET', 'HEAD', 'PATCH', 'POST', 'PUT'];
 
 /**
- * Returns all the webhooks which should be created for the give workflow
+ * Returns all the webhooks which should be created for the given workflow
  *
- * @export
- * @param {string} workflowId
- * @param {Workflow} workflow
- * @returns {IWebhookData[]}
  */
 export function getWorkflowWebhooks(
 	workflow: Workflow,
 	additionalData: IWorkflowExecuteAdditionalData,
 	destinationNode?: string,
-	ignoreRestartWehbooks = false,
+	ignoreRestartWebhooks = false,
 ): IWebhookData[] {
 	// Check all the nodes in the workflow if they have webhooks
 
@@ -96,7 +89,7 @@ export function getWorkflowWebhooks(
 		}
 		returnData.push.apply(
 			returnData,
-			NodeHelpers.getNodeWebhooks(workflow, node, additionalData, ignoreRestartWehbooks),
+			NodeHelpers.getNodeWebhooks(workflow, node, additionalData, ignoreRestartWebhooks),
 		);
 	}
 
@@ -125,6 +118,7 @@ export function encodeWebhookResponse(
 ): IExecuteResponsePromiseData {
 	if (typeof response === 'object' && Buffer.isBuffer(response.body)) {
 		response.body = {
+			// eslint-disable-next-line @typescript-eslint/naming-convention
 			'__@N8nEncodedBuffer@__': response.body.toString(BINARY_ENCODING),
 		};
 	}
@@ -135,16 +129,8 @@ export function encodeWebhookResponse(
 /**
  * Executes a webhook
  *
- * @export
- * @param {IWebhookData} webhookData
- * @param {IWorkflowDb} workflowData
- * @param {INode} workflowStartNode
- * @param {WorkflowExecuteMode} executionMode
  * @param {(string | undefined)} sessionId
- * @param {express.Request} req
- * @param {express.Response} res
  * @param {((error: Error | null, data: IResponseCallbackData) => void)} responseCallback
- * @returns {(Promise<string | undefined>)}
  */
 export async function executeWebhook(
 	workflow: Workflow,
@@ -158,6 +144,7 @@ export async function executeWebhook(
 	req: express.Request,
 	res: express.Response,
 	responseCallback: (error: Error | null, data: IResponseCallbackData) => void,
+	destinationNode?: string,
 ): Promise<string | undefined> {
 	// Get the nodeType to know which responseMode is set
 	const nodeType = workflow.nodeTypes.getByNameAndVersion(
@@ -167,7 +154,7 @@ export async function executeWebhook(
 	if (nodeType === undefined) {
 		const errorMessage = `The type of the webhook node "${workflowStartNode.name}" is not known`;
 		responseCallback(new Error(errorMessage), {});
-		throw new ResponseHelper.ResponseError(errorMessage, 500, 500);
+		throw new ResponseHelper.InternalServerError(errorMessage);
 	}
 
 	const additionalKeys: IWorkflowDataProxyAdditionalKeys = {
@@ -182,9 +169,9 @@ export async function executeWebhook(
 		user = (workflowData as WorkflowEntity).shared[0].user;
 	} else {
 		try {
-			user = await getWorkflowOwner(workflowData.id.toString());
+			user = await getWorkflowOwner(workflowData.id);
 		} catch (error) {
-			throw new ResponseHelper.ResponseError('Cannot find workflow', undefined, 404);
+			throw new ResponseHelper.NotFoundError('Cannot find workflow');
 		}
 	}
 
@@ -227,7 +214,7 @@ export async function executeWebhook(
 		// that something does not resolve properly.
 		const errorMessage = `The response mode '${responseMode}' is not valid!`;
 		responseCallback(new Error(errorMessage), {});
-		throw new ResponseHelper.ResponseError(errorMessage, 500, 500);
+		throw new ResponseHelper.InternalServerError(errorMessage);
 	}
 
 	// Add the Response and Request so that this data can be accessed in the node
@@ -249,6 +236,7 @@ export async function executeWebhook(
 				NodeExecuteFunctions,
 				executionMode,
 			);
+			eventEmitter.emit(eventEmitter.types.nodeFetchedData, workflow.id, workflowStartNode);
 		} catch (err) {
 			// Send error response to webhook caller
 			const errorMessage = 'Workflow Webhook Error: Workflow could not be started!';
@@ -344,7 +332,7 @@ export async function executeWebhook(
 		}
 
 		// Now that we know that the workflow should run we can return the default response
-		// directly if responseMode it set to "onReceived" and a respone should be sent
+		// directly if responseMode it set to "onReceived" and a response should be sent
 		if (responseMode === 'onReceived' && !didSendResponse) {
 			// Return response directly and do not wait for the workflow to finish
 			if (responseData === 'noData') {
@@ -393,6 +381,10 @@ export async function executeWebhook(
 					waitingExecution: {},
 				},
 			} as IRunExecutionData);
+
+		if (destinationNode && runExecutionData.startData) {
+			runExecutionData.startData.destinationNode = destinationNode;
+		}
 
 		if (executionId !== undefined) {
 			// Set the data the webhook node did return on the waiting node if executionId
@@ -444,6 +436,7 @@ export async function executeWebhook(
 					didSendResponse = true;
 				})
 				.catch(async (error) => {
+					ErrorReporter.error(error);
 					Logger.error(
 						`Error with Webhook-Response for execution "${executionId}": "${error.message}"`,
 						{ executionId, workflowId: workflow.id },
@@ -467,22 +460,26 @@ export async function executeWebhook(
 		);
 
 		// Get a promise which resolves when the workflow did execute and send then response
-		const executePromise = activeExecutions.getPostExecutePromise(executionId) as Promise<
-			IExecutionDb | undefined
-		>;
+		const executePromise = ActiveExecutions.getInstance().getPostExecutePromise(
+			executionId,
+		) as Promise<IExecutionDb | undefined>;
 		executePromise
 			.then(async (data) => {
 				if (data === undefined) {
 					if (!didSendResponse) {
 						responseCallback(null, {
 							data: {
-								message: 'Workflow executed sucessfully but no data was returned',
+								message: 'Workflow executed successfully but no data was returned',
 							},
 							responseCode,
 						});
 						didSendResponse = true;
 					}
 					return undefined;
+				}
+
+				if (workflowData.pinData) {
+					data.data.resultData.pinData = workflowData.pinData;
 				}
 
 				const returnData = WorkflowHelpers.getDataLastExecutedNodeData(data);
@@ -504,7 +501,7 @@ export async function executeWebhook(
 						// Return an error if no Webhook-Response node did send any data
 						responseCallback(null, {
 							data: {
-								message: 'Workflow executed sucessfully',
+								message: 'Workflow executed successfully',
 							},
 							responseCode,
 						});
@@ -517,7 +514,7 @@ export async function executeWebhook(
 					if (!didSendResponse) {
 						responseCallback(null, {
 							data: {
-								message: 'Workflow executed sucessfully but the last node did not return any data',
+								message: 'Workflow executed successfully but the last node did not return any data',
 							},
 							responseCode,
 						});
@@ -671,7 +668,7 @@ export async function executeWebhook(
 					responseCallback(new Error('There was a problem executing the workflow'), {});
 				}
 
-				throw new ResponseHelper.ResponseError(e.message, 500, 500);
+				throw new ResponseHelper.InternalServerError(e.message);
 			});
 
 		// eslint-disable-next-line consistent-return
@@ -681,15 +678,13 @@ export async function executeWebhook(
 			responseCallback(new Error('There was a problem executing the workflow'), {});
 		}
 
-		throw new ResponseHelper.ResponseError(e.message, 500, 500);
+		throw new ResponseHelper.InternalServerError(e.message);
 	}
 }
 
 /**
  * Returns the base URL of the webhooks
  *
- * @export
- * @returns
  */
 export function getWebhookBaseUrl() {
 	let urlBaseWebhook = GenericHelpers.getBaseUrl();

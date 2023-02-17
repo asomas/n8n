@@ -1,19 +1,17 @@
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
-	IExecuteFunctions,
-	IExecuteSingleFunctions,
-	ILoadOptionsFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions, IExecuteSingleFunctions, ILoadOptionsFunctions } from 'n8n-core';
 
-import {
-	IDataObject, NodeApiError, NodeOperationError,
-} from 'n8n-workflow';
+import type { IDataObject } from 'n8n-workflow';
+import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
-export async function yourlsApiRequest(this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions, method: string, body: any = {}, qs: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function yourlsApiRequest(
+	this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	method: string,
 
+	body: any = {},
+	qs: IDataObject = {},
+): Promise<any> {
 	const credentials = await this.getCredentials('yourlsApi');
 
 	qs.signature = credentials.signature as string;
@@ -31,7 +29,8 @@ export async function yourlsApiRequest(this: IExecuteFunctions | IExecuteSingleF
 		const response = await this.helpers.request.call(this, options);
 
 		if (response.status === 'fail') {
-			throw new NodeOperationError(this.getNode(),
+			throw new NodeOperationError(
+				this.getNode(),
 				`Yourls error response [400]: ${response.message}`,
 			);
 		}

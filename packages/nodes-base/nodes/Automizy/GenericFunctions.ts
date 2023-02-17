@@ -1,24 +1,24 @@
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
-	IExecuteFunctions,
-	IExecuteSingleFunctions,
-	ILoadOptionsFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions, IExecuteSingleFunctions, ILoadOptionsFunctions } from 'n8n-core';
 
-import {
-	IDataObject, NodeApiError,
-} from 'n8n-workflow';
+import type { IDataObject } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
-export async function automizyApiRequest(this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions, method: string, path: string, body: any = {}, qs: IDataObject = {}, option = {}): Promise<any> { // tslint:disable-line:no-any
+export async function automizyApiRequest(
+	this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	method: string,
+	path: string,
 
-	const credentials = await this.getCredentials('automizyApi') as IDataObject;
+	body: any = {},
+	qs: IDataObject = {},
+	option = {},
+): Promise<any> {
+	const credentials = (await this.getCredentials('automizyApi')) as IDataObject;
 
 	const options: OptionsWithUri = {
 		headers: {
-			'Authorization': `Bearer ${credentials.apiToken}`,
+			Authorization: `Bearer ${credentials.apiToken}`,
 		},
 		method,
 		body,
@@ -44,8 +44,15 @@ export async function automizyApiRequest(this: IExecuteFunctions | IExecuteSingl
 	}
 }
 
-export async function automizyApiRequestAllItems(this: IExecuteFunctions | ILoadOptionsFunctions, propertyName: string, method: string, endpoint: string, body: any = {}, query: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function automizyApiRequestAllItems(
+	this: IExecuteFunctions | ILoadOptionsFunctions,
+	propertyName: string,
+	method: string,
+	endpoint: string,
 
+	body: any = {},
+	query: IDataObject = {},
+): Promise<any> {
 	const returnData: IDataObject[] = [];
 
 	let responseData;
@@ -55,9 +62,7 @@ export async function automizyApiRequestAllItems(this: IExecuteFunctions | ILoad
 		responseData = await automizyApiRequest.call(this, method, endpoint, body, query);
 		query.page++;
 		returnData.push.apply(returnData, responseData[propertyName]);
-	} while (
-		responseData.pageCount !== responseData.page
-	);
+	} while (responseData.pageCount !== responseData.page);
 
 	return returnData;
 }

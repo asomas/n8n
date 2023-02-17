@@ -1,20 +1,22 @@
-import {
-	OptionsWithUri,
-} from 'request';
+import type { OptionsWithUri } from 'request';
 
-import {
-	IExecuteFunctions,
-	IExecuteSingleFunctions,
-	ILoadOptionsFunctions,
-} from 'n8n-core';
+import type { IExecuteFunctions, IExecuteSingleFunctions, ILoadOptionsFunctions } from 'n8n-core';
+import { BINARY_ENCODING } from 'n8n-core';
 
-import {
-	IDataObject,
-	INodeExecutionData,
-	NodeApiError,
-} from 'n8n-workflow';
+import type { IDataObject, INodeExecutionData } from 'n8n-workflow';
+import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
-export async function microsoftApiRequest(this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions, method: string, resource: string, body: any = {}, qs: IDataObject = {}, uri?: string, headers: IDataObject = {}, option: IDataObject = { json: true }): Promise<any> { // tslint:disable-line:no-any
+export async function microsoftApiRequest(
+	this: IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	method: string,
+	resource: string,
+
+	body: any = {},
+	qs: IDataObject = {},
+	uri?: string,
+	headers: IDataObject = {},
+	option: IDataObject = { json: true },
+): Promise<any> {
 	const credentials = await this.getCredentials('microsoftOutlookOAuth2Api');
 
 	let apiUrl = `https://graph.microsoft.com/v1.0/me${resource}`;
@@ -50,40 +52,68 @@ export async function microsoftApiRequest(this: IExecuteFunctions | IExecuteSing
 	}
 }
 
-export async function microsoftApiRequestAllItems(this: IExecuteFunctions | ILoadOptionsFunctions, propertyName: string, method: string, endpoint: string, body: any = {}, query: IDataObject = {}, headers: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function microsoftApiRequestAllItems(
+	this: IExecuteFunctions | ILoadOptionsFunctions,
+	propertyName: string,
+	method: string,
+	endpoint: string,
 
+	body: any = {},
+	query: IDataObject = {},
+	headers: IDataObject = {},
+): Promise<any> {
 	const returnData: IDataObject[] = [];
 
 	let responseData;
 	let uri: string | undefined;
-	query['$top'] = 100;
+	query.$top = 100;
 
 	do {
-		responseData = await microsoftApiRequest.call(this, method, endpoint, body, query, uri, headers);
+		responseData = await microsoftApiRequest.call(
+			this,
+			method,
+			endpoint,
+			body,
+			query,
+			uri,
+			headers,
+		);
 		uri = responseData['@odata.nextLink'];
 		returnData.push.apply(returnData, responseData[propertyName]);
-	} while (
-		responseData['@odata.nextLink'] !== undefined
-	);
+	} while (responseData['@odata.nextLink'] !== undefined);
 
 	return returnData;
 }
 
-export async function microsoftApiRequestAllItemsSkip(this: IExecuteFunctions | ILoadOptionsFunctions, propertyName: string, method: string, endpoint: string, body: any = {}, query: IDataObject = {}, headers: IDataObject = {}): Promise<any> { // tslint:disable-line:no-any
+export async function microsoftApiRequestAllItemsSkip(
+	this: IExecuteFunctions | ILoadOptionsFunctions,
+	propertyName: string,
+	method: string,
+	endpoint: string,
 
+	body: any = {},
+	query: IDataObject = {},
+	headers: IDataObject = {},
+): Promise<any> {
 	const returnData: IDataObject[] = [];
 
 	let responseData;
-	query['$top'] = 100;
-	query['$skip'] = 0;
+	query.$top = 100;
+	query.$skip = 0;
 
 	do {
-		responseData = await microsoftApiRequest.call(this, method, endpoint, body, query, undefined, headers);
-		query['$skip'] += query['$top'];
+		responseData = await microsoftApiRequest.call(
+			this,
+			method,
+			endpoint,
+			body,
+			query,
+			undefined,
+			headers,
+		);
+		query.$skip += query.$top;
 		returnData.push.apply(returnData, responseData[propertyName]);
-	} while (
-		responseData['value'].length !== 0
-	);
+	} while (responseData.value.length !== 0);
 
 	return returnData;
 }
@@ -106,38 +136,46 @@ export function createMessage(fields: IDataObject) {
 			contentType: fields.bodyContentType,
 		};
 
-		message['body'] = bodyObject;
-		delete fields['bodyContent'];
-		delete fields['bodyContentType'];
+		message.body = bodyObject;
+		delete fields.bodyContent;
+		delete fields.bodyContentType;
 	}
 
 	// Handle custom headers
-	if ('internetMessageHeaders' in fields && 'headers' in (fields.internetMessageHeaders as IDataObject)) {
+	if (
+		'internetMessageHeaders' in fields &&
+		'headers' in (fields.internetMessageHeaders as IDataObject)
+	) {
 		fields.internetMessageHeaders = (fields.internetMessageHeaders as IDataObject).headers;
 	}
 
 	// Handle recipient fields
-	['bccRecipients', 'ccRecipients', 'replyTo', 'sender', 'toRecipients'].forEach(key => {
+	['bccRecipients', 'ccRecipients', 'replyTo', 'sender', 'toRecipients'].forEach((key) => {
 		if (Array.isArray(fields[key])) {
-			fields[key] = (fields[key] as string[]).map(email => makeRecipient(email));
+			fields[key] = (fields[key] as string[]).map((email) => makeRecipient(email));
 		} else if (fields[key] !== undefined) {
-			fields[key] = (fields[key] as string).split(',').map((recipient: string) => makeRecipient(recipient));
+			fields[key] = (fields[key] as string)
+				.split(',')
+				.map((recipient: string) => makeRecipient(recipient));
 		}
 	});
 
-	['from', 'sender'].forEach(key => {
+	['from', 'sender'].forEach((key) => {
 		if (fields[key] !== undefined) {
 			fields[key] = makeRecipient(fields[key] as string);
 		}
 	});
-
 
 	Object.assign(message, fields);
 
 	return message;
 }
 
-export async function downloadAttachments(this: IExecuteFunctions, messages: IDataObject[] | IDataObject, prefix: string) {
+export async function downloadAttachments(
+	this: IExecuteFunctions,
+	messages: IDataObject[] | IDataObject,
+	prefix: string,
+) {
 	const elements: INodeExecutionData[] = [];
 	if (!Array.isArray(messages)) {
 		messages = [messages];
@@ -168,7 +206,11 @@ export async function downloadAttachments(this: IExecuteFunctions, messages: IDa
 				);
 
 				const data = Buffer.from(response.body as string, 'utf8');
-				element.binary![`${prefix}${index}`] = await this.helpers.prepareBinaryData(data as unknown as Buffer, attachment.name, attachment.contentType);
+				element.binary![`${prefix}${index}`] = await this.helpers.prepareBinaryData(
+					data as unknown as Buffer,
+					attachment.name,
+					attachment.contentType,
+				);
 			}
 		}
 		if (Object.keys(element.binary!).length === 0) {
@@ -177,4 +219,40 @@ export async function downloadAttachments(this: IExecuteFunctions, messages: IDa
 		elements.push(element);
 	}
 	return elements;
+}
+
+export async function binaryToAttachments(
+	this: IExecuteFunctions,
+	attachments: IDataObject[],
+	items: INodeExecutionData[],
+	i: number,
+) {
+	return Promise.all(
+		attachments.map(async (attachment) => {
+			const { binary } = items[i];
+
+			if (binary === undefined) {
+				throw new NodeOperationError(this.getNode(), 'No binary data exists on item!', {
+					itemIndex: i,
+				});
+			}
+
+			const binaryPropertyName = attachment.binaryPropertyName as string;
+			if (binary[binaryPropertyName] === undefined) {
+				throw new NodeOperationError(
+					this.getNode(),
+					`No binary data property "${binaryPropertyName}" does not exists on item!`,
+					{ itemIndex: i },
+				);
+			}
+
+			const binaryData = binary[binaryPropertyName];
+			const dataBuffer = await this.helpers.getBinaryDataBuffer(i, binaryPropertyName);
+			return {
+				'@odata.type': '#microsoft.graph.fileAttachment',
+				name: binaryData.fileName,
+				contentBytes: dataBuffer.toString(BINARY_ENCODING),
+			};
+		}),
+	);
 }
