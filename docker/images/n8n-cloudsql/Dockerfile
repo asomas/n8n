@@ -1,7 +1,7 @@
-FROM n8nio/n8n
+FROM n8nio/n8n:latest
 
 # Download proxy
-RUN wget "https://storage.googleapis.com/cloudsql-proxy/v1.21.0/cloud_sql_proxy.linux.amd64" -O /cloud_sql_proxy
+RUN wget "https://storage.googleapis.com/cloudsql-proxy/v1.33.2/cloud_sql_proxy.linux.amd64" -O /cloud_sql_proxy
 RUN chmod +x /cloud_sql_proxy
 
 COPY docker/images/n8n-cloudsql/docker-entrypoint.sh /docker-entrypoint.sh
